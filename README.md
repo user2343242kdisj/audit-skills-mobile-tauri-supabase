@@ -150,6 +150,7 @@ Production-ready scripts and templates that close gaps no public tool covers as 
 | [`tools/validate-skill.py`](tools/validate-skill.py) | Frontmatter validator for `SKILL.md` files; aligned with CI. |
 | [`templates/security-workflow.yml`](templates/security-workflow.yml) | Drop-in `.github/workflows/security.yml` orchestrating 9 layers: ggshield, Squawk, Splinter, supabase test db, pgrls, Supashield, Schemathesis, BOLA harness, Semgrep, MobSF, cargo-audit, cargo-deny, testssl, SBOM, Grype. |
 | [`templates/threat-model-pytm.py`](templates/threat-model-pytm.py) | pytm starter for a mobile + Tauri + Supabase architecture; auto-runs STRIDE + lists 16 custom audit-derived threats. |
+| [`templates/claude-agents/`](templates/claude-agents/) | **21-subagent hierarchy** for Claude Code (`.claude/agents/`): 1 orchestrator + 20 narrow domain experts (7 Supabase + 5 Tauri + 4 Mobile + 4 cross-cutting). Drop into any repo. See [`templates/claude-agents/README.md`](templates/claude-agents/README.md). |
 
 ## Deep-dive audit references in this repo
 
@@ -200,7 +201,15 @@ then loads the full body (500–2,000 tokens) only for the matched skills.
 │   └── sbom-generate.sh                 # CycloneDX SBOM + Grype
 ├── templates/
 │   ├── security-workflow.yml            # Drop-in CI orchestrator
-│   └── threat-model-pytm.py             # pytm starter
+│   ├── threat-model-pytm.py             # pytm starter
+│   └── claude-agents/                   # 21 Claude Code subagents
+│       ├── audit-orchestrator.md
+│       ├── supabase-{rls,storage,edge-functions,auth,realtime,postgres,network}-auditor.md
+│       ├── tauri-{capabilities,ipc,csp-webview,updater,binary-hardening}-auditor.md
+│       ├── mobile-{static-analysis,dynamic-analysis,deeplinks,storage-crypto}-auditor.md
+│       ├── {secrets-scanner,sast-dast,sbom-vuln}-coordinator.md
+│       ├── threat-modeler.md
+│       └── README.md
 ├── .github/workflows/
 │   ├── validate-skills.yml              # CI: runs validator
 │   └── update-index.yml                 # CI: regenerates index.json
