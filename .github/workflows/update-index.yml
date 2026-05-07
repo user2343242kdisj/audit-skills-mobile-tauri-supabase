@@ -1,4 +1,4 @@
-name: Update marketplace index
+name: Update index
 
 on:
   push:
@@ -15,8 +15,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          python-version: '3.11'
 
       - name: Regenerate index.json
         run: |
@@ -24,47 +25,48 @@ jobs:
           import os, json, re
           from datetime import datetime, timezone
 
-          skills_dir = "skills"
           skills = []
-
-          for skill_name in sorted(os.listdir(skills_dir)):
-              skill_md = os.path.join(skills_dir, skill_name, "SKILL.md")
-              if not os.path.isfile(skill_md):
+          for s in sorted(os.listdir("skills")):
+              p = f"skills/{s}/SKILL.md"
+              if not os.path.isfile(p):
                   continue
-              with open(skill_md, "r", encoding="utf-8") as f:
-                  content = f.read()
-              fm_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-              description = ""
-              if fm_match:
-                  m = re.search(r"^description:\s*(.+)$", fm_match.group(1), re.MULTILINE)
+              content = open(p, encoding="utf-8").read()
+              fm = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+              desc = ""
+              subdomain = ""
+              if fm:
+                  m = re.search(r"^description:\s*(.+?)(?:\n[a-z_]+:|\n---|$)", fm.group(1), re.MULTILINE | re.DOTALL)
                   if m:
-                      description = m.group(1).strip().strip('"')
+                      desc = re.sub(r"\s+", " ", m.group(1).strip().strip('"').strip("'").strip(">-").strip()).strip()
+                  sd = re.search(r"^subdomain:\s*(.+)$", fm.group(1), re.MULTILINE)
+                  if sd:
+                      subdomain = sd.group(1).strip()
               skills.append({
-                  "name": skill_name,
-                  "description": description,
+                  "name": s,
+                  "description": desc,
+                  "subdomain": subdomain,
                   "domain": "cybersecurity",
-                  "path": f"skills/{skill_name}"
+                  "path": f"skills/{s}",
               })
 
-          index = {
-              "version": "1.1.0",
+          idx = {
+              "version": "2.0.0",
               "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-              "repository": "https://github.com/mukul975/Anthropic-Cybersecurity-Skills",
               "domain": "cybersecurity",
+              "scope": "mobile-app + tauri-desktop + supabase-backend security audit",
               "total_skills": len(skills),
-              "skills": skills
+              "skills": skills,
           }
 
           with open("index.json", "w", encoding="utf-8") as f:
-              json.dump(index, f, separators=(',', ':'))
-
+              json.dump(idx, f, indent=2)
           print(f"Updated index.json: {len(skills)} skills")
           EOF
 
       - name: Commit updated index
         run: |
-          git config user.name "mukul975"
-          git config user.email "mukuljangra5@gmail.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.json
           git diff --staged --quiet || git commit -m "chore: auto-update index.json"
           git push
