@@ -1,10 +1,12 @@
 # Audit Skills — Mobile · Tauri · Supabase
 
-Curated set of **67 cybersecurity skills** for auditing a stack composed of:
+Curated set of **68 cybersecurity skills** for auditing a stack composed of:
 
 - **Mobile app** (iOS + Android)
 - **Desktop app** built with **Tauri** (Rust core + system WebView)
 - **Backend** on **Supabase** (Postgres + GoTrue auth + Storage + Edge Functions)
+
+Plus **deep-dive audit references** in [`docs/`](docs/), **production-ready audit tools** in [`tools/`](tools/), and **drop-in templates** for CI and threat modeling in [`templates/`](templates/).
 
 Each skill is a structured `SKILL.md` with YAML frontmatter and a Markdown body
 (`When to Use / Prerequisites / Workflow / Key Concepts / Tools & Systems / Common Scenarios / Output Format`),
@@ -60,13 +62,12 @@ The 67 skills are organised below in the order a real audit would run them.
 
 | Skill | Purpose |
 |---|---|
-| `performing-thick-client-application-penetration-test` | Closest analog to Tauri (until Tauri-specific skill exists) |
+| `auditing-tauri-capabilities` | **Tauri-specific:** capability files, ACL invariants, high-risk identifier checklist, updater config, runtime addCapability search |
+| `performing-thick-client-application-penetration-test` | Generic thick-client pentest workflow |
 | `performing-binary-exploitation-analysis` | Stack/heap analysis on the compiled binary |
 | `reverse-engineering-rust-malware` | Rust binary triage techniques apply to your own binary |
 
-> **Gap:** no skill in this set covers Tauri `tauri.conf.json` allowlist review,
-> IPC command auditing, custom protocol handlers, or updater signing.
-> Use the [official Tauri security guide](https://tauri.app/security/) alongside.
+For deep technical reference, see [`docs/tauri-2-security-analysis.md`](docs/tauri-2-security-analysis.md) — 30-section audit guide with all CVEs, ACL schema, IPC mechanics, and a 9-block checklist.
 
 ### 5. Backend / API audit (Supabase REST + GoTrue)
 
@@ -137,6 +138,27 @@ The 67 skills are organised below in the order a real audit would run them.
 
 ---
 
+## Audit tooling shipped in this repo
+
+Production-ready scripts and templates that close gaps no public tool covers as of May 2026.
+
+| Path | Purpose |
+|---|---|
+| [`tools/bola-harness.py`](tools/bola-harness.py) | BOLA / RLS-bypass scanner for Supabase PostgREST. Discovers tables via OpenAPI, probes cross-user access (READ / UPDATE / DELETE) with two test JWTs, fails CI on HIGH+ findings. Schemathesis is RLS-blind — this fills that gap. |
+| [`tools/semgrep-edge-functions.yml`](tools/semgrep-edge-functions.yml) | 13 Semgrep rules for Supabase Edge Functions (Deno + TypeScript). Detects `service_role` from request, hardcoded JWTs, `Deno.env` leaks, CORS wildcards, missing JWT verify, RPC concat-injection, JWT decode without verify, deprecated packages. |
+| [`tools/sbom-generate.sh`](tools/sbom-generate.sh) | CycloneDX SBOM generation for npm + cargo + Android + iOS, then Grype scan, fail on HIGH+. |
+| [`tools/validate-skill.py`](tools/validate-skill.py) | Frontmatter validator for `SKILL.md` files; aligned with CI. |
+| [`templates/security-workflow.yml`](templates/security-workflow.yml) | Drop-in `.github/workflows/security.yml` orchestrating 9 layers: ggshield, Squawk, Splinter, supabase test db, pgrls, Supashield, Schemathesis, BOLA harness, Semgrep, MobSF, cargo-audit, cargo-deny, testssl, SBOM, Grype. |
+| [`templates/threat-model-pytm.py`](templates/threat-model-pytm.py) | pytm starter for a mobile + Tauri + Supabase architecture; auto-runs STRIDE + lists 16 custom audit-derived threats. |
+
+## Deep-dive audit references in this repo
+
+| File | Lines | Coverage |
+|---|---|---|
+| [`docs/owasp-mas-analysis.md`](docs/owasp-mas-analysis.md) | 355 | OWASP MAS (MASVS v2.1 + MASTG + MASWE) for the mobile portion |
+| [`docs/tauri-2-security-analysis.md`](docs/tauri-2-security-analysis.md) | 1260 | Tauri 2 security model, all 8 GHSAs, IPC mechanics, capability schema |
+| [`docs/supabase-security-tools.md`](docs/supabase-security-tools.md) | 774 | Supabase security tooling stack (5 layers), CVE-2026-31813, MCP lethal trifecta, full Splinter rule list |
+
 ## How to use this with Claude Code
 
 ```bash
@@ -166,11 +188,22 @@ then loads the full body (500–2,000 tokens) only for the matched skills.
 
 ```
 .
-├── skills/                              # 67 SKILL.md (one folder each)
-├── tools/validate-skill.py              # Frontmatter validator
+├── skills/                              # 68 SKILL.md (one folder each)
+├── docs/                                # Deep audit references
+│   ├── owasp-mas-analysis.md
+│   ├── tauri-2-security-analysis.md
+│   └── supabase-security-tools.md
+├── tools/
+│   ├── validate-skill.py                # Frontmatter validator
+│   ├── bola-harness.py                  # PostgREST BOLA / RLS-bypass scanner
+│   ├── semgrep-edge-functions.yml       # Semgrep rules for Deno Edge Fns
+│   └── sbom-generate.sh                 # CycloneDX SBOM + Grype
+├── templates/
+│   ├── security-workflow.yml            # Drop-in CI orchestrator
+│   └── threat-model-pytm.py             # pytm starter
 ├── .github/workflows/
 │   ├── validate-skills.yml              # CI: runs validator
-│   └── update-index.yml                 # CI: regenerates index.json on push
+│   └── update-index.yml                 # CI: regenerates index.json
 ├── .claude-plugin/
 │   ├── plugin.json
 │   └── marketplace.json

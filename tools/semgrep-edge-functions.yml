@@ -1,0 +1,238 @@
+# Semgrep rules for Supabase Edge Functions (Deno + TypeScript)
+#
+# These rules target the common security anti-patterns that no public
+# rule pack covers as of May 2026. Use alongside Semgrep's built-in
+# `p/typescript` and `p/security-audit` rule packs.
+#
+# Run locally:
+#   semgrep --config tools/semgrep-edge-functions.yml supabase/functions/
+#
+# Run in CI:
+#   - uses: semgrep/semgrep-action@v1
+#     with:
+#       config: tools/semgrep-edge-functions.yml
+
+rules:
+
+  # --------------------------------------------------------------------------
+  # 1. service_role key reaching createClient from anything other than env
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-service-role-from-non-env
+    message: >-
+      `createClient` is called with what appears to be a service_role key from
+      a non-environment source (request body, header, or hard-coded literal).
+      service_role bypasses ALL RLS — only `Deno.env.get(...)` is acceptable.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-either:
+          - pattern: createClient($URL, $REQ.headers.get(...))
+          - pattern: createClient($URL, $REQ.json().$KEY)
+          - pattern: createClient($URL, "ey...")
+          - pattern: createClient($URL, $X)
+      - pattern-not: createClient($URL, Deno.env.get($KEY))
+      - pattern-not: createClient($URL, $ANON_KEY, ...)
+
+  # --------------------------------------------------------------------------
+  # 2. service_role key embedded as a literal anywhere
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-hardcoded-service-role
+    message: >-
+      Hard-coded JWT-shaped string detected. service_role keys MUST come from
+      `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')` and never be committed.
+    severity: ERROR
+    languages: [typescript]
+    pattern-regex: 'eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{30,}'
+
+  # --------------------------------------------------------------------------
+  # 3. Deno.env.toObject() leaked back to the client
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-env-leaked-in-response
+    message: >-
+      `Deno.env.toObject()` returns the entire process environment, including
+      SUPABASE_SERVICE_ROLE_KEY. Returning it (or stringifying it into a
+      response/error) leaks every secret. Use `Deno.env.get('KEY')` and
+      return only what is intentionally public.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-either:
+          - pattern: new Response(JSON.stringify(Deno.env.toObject()))
+          - pattern: new Response(Deno.env.toObject())
+          - pattern: |
+              return new Response($X, ...)
+              ...
+              $X = Deno.env.toObject()
+          - pattern: console.log(Deno.env.toObject())
+          - pattern: console.error(Deno.env.toObject())
+
+  # --------------------------------------------------------------------------
+  # 4. CORS '*' in production responses
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-cors-wildcard
+    message: >-
+      `Access-Control-Allow-Origin: *` allows any origin to call this
+      function. In combination with Authorization header reflection, this
+      creates a credential-leak risk. Use a strict allowlist of your app
+      domains (mobile schemes + Tauri origin + production web URL).
+    severity: WARNING
+    languages: [typescript]
+    pattern-either:
+      - pattern: |
+          { ..., "Access-Control-Allow-Origin": "*", ... }
+      - pattern: |
+          headers.set("Access-Control-Allow-Origin", "*")
+      - pattern: |
+          response.headers.append("Access-Control-Allow-Origin", "*")
+
+  # --------------------------------------------------------------------------
+  # 5. Function deployed with verify_jwt = false but no manual verification
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-no-manual-jwt-verify
+    message: >-
+      Edge Function appears to read user context (Authorization header)
+      without verifying the JWT. If `verify_jwt = false` in config.toml,
+      every public function MUST verify the bearer token via getUser() or
+      a JWKS check before trusting any claims.
+    severity: WARNING
+    languages: [typescript]
+    patterns:
+      - pattern: |
+          $REQ.headers.get("Authorization")
+      - pattern-not-inside: |
+          ...
+          await $CLIENT.auth.getUser($TOKEN)
+          ...
+      - pattern-not-inside: |
+          ...
+          await jose.jwtVerify(...)
+          ...
+
+  # --------------------------------------------------------------------------
+  # 6. Concatenated input into supabase.rpc() — possible stored injection
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-rpc-string-concat
+    message: >-
+      `supabase.rpc(name, args)` with `args` built via string concatenation
+      or template literals from request input is a stored-SQL-injection
+      class. Pass parameters as a JSON object directly; never interpolate.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $CLIENT.rpc($NAME, `${$X}`)
+          - pattern: |
+              $CLIENT.rpc($NAME, $X + $Y)
+
+  # --------------------------------------------------------------------------
+  # 7. Logging sensitive headers / tokens
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-log-sensitive-headers
+    message: >-
+      Logging full request headers leaks bearer tokens, apikeys, and
+      cookies. Redact Authorization / apikey / cookie before logging.
+    severity: WARNING
+    languages: [typescript]
+    pattern-either:
+      - pattern: console.log($REQ.headers)
+      - pattern: console.log(Object.fromEntries($REQ.headers))
+      - pattern: console.error($REQ.headers)
+      - pattern: console.log($REQ.headers.get("Authorization"))
+      - pattern: console.log($REQ.headers.get("apikey"))
+
+  # --------------------------------------------------------------------------
+  # 8. Error stack reflected to client
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-error-leaked-to-client
+    message: >-
+      Returning `error.stack` or the raw Error object leaks server file
+      paths, library versions, and sometimes secrets. Return a stable
+      error code + log the stack server-side instead.
+    severity: WARNING
+    languages: [typescript]
+    pattern-either:
+      - pattern: new Response($ERR.stack, ...)
+      - pattern: new Response(JSON.stringify($ERR), ...)
+      - pattern: |
+          return new Response($X, ...)
+          ...
+          $X = $ERR.stack
+
+  # --------------------------------------------------------------------------
+  # 9. fetch() to user-supplied URL — SSRF
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-ssrf-via-user-url
+    message: >-
+      `fetch()` with a URL derived from request input bypasses any browser
+      CORS and runs from Supabase's egress IPs. Audit for SSRF: validate
+      the URL is on an allowlist, reject 169.254.0.0/16, 127.0.0.0/8,
+      10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, [::1], fc00::/7.
+    severity: WARNING
+    languages: [typescript]
+    patterns:
+      - pattern-either:
+          - pattern: fetch($REQ.json().$URL)
+          - pattern: fetch($REQ.headers.get($H))
+          - pattern: |
+              const $URL = $REQ.json().$F
+              ...
+              fetch($URL)
+
+  # --------------------------------------------------------------------------
+  # 10. Catch-all that sends 200 — masks errors and possible info leak
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-catch-all-returns-2xx
+    message: >-
+      `catch` block that returns a 2xx response masks failures and may
+      leak partial state. Return 5xx for unexpected errors and a
+      structured error code for expected ones.
+    severity: INFO
+    languages: [typescript]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              try { ... } catch ($E) { return new Response($X, { status: 200 }); }
+          - pattern: |
+              try { ... } catch ($E) { return new Response($X); }
+
+  # --------------------------------------------------------------------------
+  # 11. Importing supabase-js v1 (deprecated)
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-deprecated-supabase-js-v1
+    message: >-
+      `@supabase/supabase-js@1` is deprecated. Migrate to v2 — many
+      Auth/Storage v1 helpers have known issues unfixed in v1.
+    severity: WARNING
+    languages: [typescript]
+    pattern-either:
+      - pattern: import { createClient } from "https://esm.sh/@supabase/supabase-js@1"
+      - pattern: import { createClient } from "https://cdn.skypack.dev/@supabase/supabase-js@1"
+
+  # --------------------------------------------------------------------------
+  # 12. Deprecated auth-helpers package
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-auth-helpers-deprecated
+    message: >-
+      `@supabase/auth-helpers-*` is deprecated in favor of `@supabase/ssr`.
+      Migrate before next major Supabase release.
+    severity: INFO
+    languages: [typescript]
+    pattern-regex: '@supabase/auth-helpers-[a-z]+'
+
+  # --------------------------------------------------------------------------
+  # 13. Insecure JWT decode (split + JSON.parse) without signature verify
+  # --------------------------------------------------------------------------
+  - id: supabase-edge-jwt-decode-without-verify
+    message: >-
+      Decoding the JWT payload via split('.') + atob + JSON.parse skips
+      signature verification. Trusting decoded claims allows attackers to
+      forge JWTs by hand. Use `await client.auth.getUser(token)` or
+      `jose.jwtVerify(token, jwks)`.
+    severity: ERROR
+    languages: [typescript]
+    pattern-either:
+      - pattern: |
+          JSON.parse(atob($TOK.split(".")[1]))
+      - pattern: |
+          JSON.parse(atob($TOK.split('.')[1]))

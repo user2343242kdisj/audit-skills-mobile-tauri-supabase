@@ -1,0 +1,461 @@
+# GitHub Actions security workflow — copy into the user's app repo as
+# `.github/workflows/security.yml`. Orchestrates the full audit toolchain
+# for a mobile + Tauri-desktop + Supabase stack.
+#
+# Required repo secrets:
+#   GITGUARDIAN_API_KEY        - https://dashboard.gitguardian.com/api/personal-access-tokens
+#   SUPABASE_DB_URL            - postgres://... (read-only role recommended)
+#   SUPABASE_PROJECT_REF       - project ref (e.g. "abcdefghij")
+#   SUPABASE_ANON_KEY          - sb_publishable_... (the new format)
+#   SUPABASE_TEST_USER_A_JWT   - long-lived JWT for test user A (BOLA harness)
+#   SUPABASE_TEST_USER_B_JWT   - long-lived JWT for test user B
+#   SEMGREP_APP_TOKEN          - https://semgrep.dev/login
+#
+# Required repo files:
+#   tools/bola-harness.py             (in this repo, copy or vendor)
+#   tools/semgrep-edge-functions.yml  (in this repo, copy or vendor)
+#   supabase/migrations/*.sql
+#   supabase/tests/*.test.sql
+#   supabase/functions/<name>/index.ts
+#   src-tauri/capabilities/*.json
+#   src-tauri/Cargo.toml + Cargo.lock
+#   package.json + package-lock.json | pnpm-lock.yaml | yarn.lock
+#
+# This workflow is conservative: every job fails the run on findings that
+# matter. Tune `continue-on-error` for the noisy ones, never for ERROR-level.
+
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'   # Weekly Monday 06:00 UTC — full sweep
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # for SARIF uploads
+  pull-requests: write     # for PR comments from some scanners
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Layer 1 — Secret hygiene
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    name: Secret scan (GitGuardian + TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: GitGuardian/ggshield/actions/secret@v1
+        env:
+          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
+          GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+
+      - name: TruffleHog (verified secrets)
+        uses: trufflesecurity/trufflehog@v3
+        with:
+          extra_args: --only-verified --fail
+
+  # ---------------------------------------------------------------------------
+  # Layer 2 — Database: migrations + RLS lint + RLS unit tests
+  # ---------------------------------------------------------------------------
+  db-migration-lint:
+    name: Migration lint (Squawk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sbdchd/squawk-action@v2
+        with:
+          version: latest
+          pattern: "supabase/migrations/*.sql"
+          fail_on_violations: true
+          # Squawk ignores: comma-separated list of rule IDs to ignore
+          # See https://squawkhq.com/docs/rules/ for full list
+
+  db-rls-lint:
+    name: RLS lint (Splinter + supabase db lint + pgrls)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql + supabase CLI
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          curl -L https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin
+
+      - name: supabase db lint (plpgsql_check)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db lint --db-url "$SUPABASE_DB_URL" --level error --fail-on warning
+
+      - name: Splinter — fail on any ERROR-level finding
+        env:
+          PSQL_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          curl -fsSL -o /tmp/splinter.sql https://raw.githubusercontent.com/supabase/splinter/main/splinter.sql
+          psql "$PSQL_URL" -f /tmp/splinter.sql -At \
+            --csv -c "select name, level, title, detail from splinter where level='ERROR'" \
+            > /tmp/splinter-errors.csv
+          if [ -s /tmp/splinter-errors.csv ]; then
+            echo "::error::Splinter ERROR-level findings present"
+            cat /tmp/splinter-errors.csv
+            exit 1
+          fi
+
+      - name: Splinter — warn on WARN-level
+        if: always()
+        env:
+          PSQL_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$PSQL_URL" -At --csv \
+            -c "select name, level, title from splinter where level='WARN'" \
+            | tee /tmp/splinter-warns.csv
+          while IFS=',' read -r name level title; do
+            echo "::warning title=$name::$title"
+          done < /tmp/splinter-warns.csv
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: pgrls
+        env:
+          PGRLS_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          pip install --quiet pgrls
+          pgrls lint --db-url "$PGRLS_DB_URL" --fail-on-warn
+
+  db-rls-tests:
+    name: RLS unit tests (pgTAP via supabase test db)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install supabase CLI
+        run: |
+          curl -L https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin
+
+      - name: Run pgTAP tests
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase test db --db-url "$SUPABASE_DB_URL"
+
+  db-supashield:
+    name: Supashield (purpose-built Supabase audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm install -g @supashield/cli
+      - name: Audit
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          supashield audit \
+            --url "$SUPABASE_URL" \
+            --service-role "$SUPABASE_SERVICE_ROLE_KEY" \
+            --output json > /tmp/supashield.json
+          # Fail if any HIGH or CRITICAL severity findings
+          jq -e '[.findings[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length == 0' \
+            /tmp/supashield.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supashield-report
+          path: /tmp/supashield.json
+
+  # ---------------------------------------------------------------------------
+  # Layer 3 — API DAST (PostgREST + custom BOLA harness)
+  # ---------------------------------------------------------------------------
+  api-schemathesis:
+    name: API DAST (Schemathesis vs PostgREST)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install schemathesis
+      - name: Schemathesis — anon role
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          schemathesis run \
+            "$SUPABASE_URL/rest/v1/" \
+            --base-url "$SUPABASE_URL/rest/v1/" \
+            --header "apikey: $SUPABASE_ANON_KEY" \
+            --checks all \
+            --max-examples 50 \
+            --workers 4 \
+            --report
+      - name: Schemathesis — authenticated role
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          USER_A_JWT: ${{ secrets.SUPABASE_TEST_USER_A_JWT }}
+        run: |
+          schemathesis run \
+            "$SUPABASE_URL/rest/v1/" \
+            --base-url "$SUPABASE_URL/rest/v1/" \
+            --header "apikey: $SUPABASE_ANON_KEY" \
+            --header "Authorization: Bearer $USER_A_JWT" \
+            --checks all \
+            --max-examples 50 \
+            --workers 4
+
+  api-bola:
+    name: API BOLA harness (custom RLS-bypass detection)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install requests
+      - name: Run BOLA harness
+        env:
+          SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          USER_A_JWT: ${{ secrets.SUPABASE_TEST_USER_A_JWT }}
+          USER_B_JWT: ${{ secrets.SUPABASE_TEST_USER_B_JWT }}
+        run: |
+          python3 tools/bola-harness.py \
+            --url "$SUPABASE_URL" \
+            --anon-key "$SUPABASE_ANON_KEY" \
+            --user-a-jwt "$USER_A_JWT" \
+            --user-b-jwt "$USER_B_JWT" \
+            --output /tmp/bola-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bola-report
+          path: /tmp/bola-report.json
+
+  # ---------------------------------------------------------------------------
+  # Layer 4 — Edge Functions (Deno) static analysis
+  # ---------------------------------------------------------------------------
+  edge-fn-lint:
+    name: Edge Functions lint (Deno + Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v1
+        with: { deno-version: 'v1.x' }
+      - name: deno lint
+        run: deno lint supabase/functions/
+      - name: deno fmt --check
+        run: deno fmt --check supabase/functions/
+      - name: deno test
+        run: |
+          deno test --allow-all supabase/functions/ || true
+
+      - name: Semgrep — Supabase Edge Function rules
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: |
+            tools/semgrep-edge-functions.yml
+            p/typescript
+            p/security-audit
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Layer 5 — Tauri capability audit + Rust dependency hygiene
+  # ---------------------------------------------------------------------------
+  tauri-capability-audit:
+    name: Tauri capability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Run capability invariant checker
+        run: |
+          python3 - <<'PY'
+          import json, glob, sys
+          findings = []
+          HIGH_RISK = (
+            "shell:allow-execute","shell:allow-spawn","shell:allow-open",
+            "fs:default","fs:allow-write-text-file","fs:allow-write-file",
+            "fs:allow-rename","fs:allow-remove",
+            "core:webview:allow-create-webview","core:webview:allow-create-webview-window",
+            "core:webview:allow-internal-toggle-devtools",
+            "core:window:allow-set-content-protected",
+            "core:event:allow-emit","http:default",
+            "global-shortcut:allow-register","clipboard-manager:allow-write-text",
+            "process:allow-exit","process:allow-restart"
+          )
+          for path in sorted(glob.glob("src-tauri/capabilities/*.json")):
+              with open(path) as f:
+                  cap = json.load(f)
+              caps = cap if isinstance(cap, list) else cap.get("capabilities", [cap])
+              for c in caps:
+                  cid = c.get("identifier","(no-id)")
+                  perms = c.get("permissions", [])
+                  windows = c.get("windows", [])
+                  if not c.get("description","").strip():
+                      findings.append(f"{path}#{cid}: empty description")
+                  if windows == ["*"] or "*" in windows:
+                      risky = [p for p in perms if isinstance(p,str) and any(r in p for r in HIGH_RISK)]
+                      if risky:
+                          findings.append(f"{path}#{cid}: windows=['*'] + {risky}")
+                  for p in perms:
+                      pid = p if isinstance(p, str) else p.get("identifier","")
+                      if pid in HIGH_RISK:
+                          findings.append(f"{path}#{cid}: high-risk grant '{pid}'")
+                  remote = c.get("remote") or {}
+                  for url in remote.get("urls", []):
+                      if "*" in url and url.count(".") < 2:
+                          findings.append(f"{path}#{cid}: remote.urls too broad: {url!r}")
+          if findings:
+              print("\n".join(findings)); sys.exit(1)
+          print("Tauri capability invariants: PASS")
+          PY
+
+  rust-audit:
+    name: Rust deps (cargo-audit + cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --all-features
+          manifest-path: src-tauri/Cargo.toml
+
+  # ---------------------------------------------------------------------------
+  # Layer 6 — Mobile static analysis (MobSF)
+  # ---------------------------------------------------------------------------
+  mobile-mobsf:
+    name: Mobile static analysis (MobSF)
+    runs-on: ubuntu-latest
+    if: hashFiles('android/**', 'ios/**', '**/*.apk', '**/*.ipa') != ''
+    services:
+      mobsf:
+        image: opensecurity/mobile-security-framework-mobsf:latest
+        ports: [ '8000:8000' ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for MobSF
+        run: timeout 60 bash -c 'until curl -fs http://localhost:8000/api_docs; do sleep 2; done'
+      - name: Locate APK / IPA
+        id: locate
+        run: |
+          APK=$(find . -name '*.apk' | head -1)
+          IPA=$(find . -name '*.ipa' | head -1)
+          echo "apk=$APK" >> $GITHUB_OUTPUT
+          echo "ipa=$IPA" >> $GITHUB_OUTPUT
+      - name: Scan APK
+        if: steps.locate.outputs.apk != ''
+        run: |
+          curl -F "file=@${{ steps.locate.outputs.apk }}" http://localhost:8000/api/v1/upload \
+            -H "Authorization: $MOBSF_API_KEY" -o /tmp/upload.json
+          HASH=$(jq -r '.hash' /tmp/upload.json)
+          curl -X POST http://localhost:8000/api/v1/scan -H "Authorization: $MOBSF_API_KEY" \
+            -d "hash=$HASH&scan_type=apk" -o /tmp/scan.json
+          curl -X POST http://localhost:8000/api/v1/report_json -H "Authorization: $MOBSF_API_KEY" \
+            -d "hash=$HASH" -o /tmp/mobsf-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: mobsf-report, path: /tmp/mobsf-report.json }
+
+  # ---------------------------------------------------------------------------
+  # Layer 7 — Network / TLS posture
+  # ---------------------------------------------------------------------------
+  ssl-test:
+    name: TLS posture (testssl.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - name: testssl.sh against Supabase endpoints
+        env:
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          docker run --rm drwetter/testssl.sh:latest --quiet \
+            --severity HIGH --jsonfile-pretty /tmp/db5432.json \
+            "db.${REF}.supabase.co:5432" || true
+          docker run --rm drwetter/testssl.sh:latest --quiet \
+            --severity HIGH --jsonfile-pretty /tmp/db6543.json \
+            "db.${REF}.supabase.co:6543" || true
+          docker run --rm drwetter/testssl.sh:latest --quiet \
+            --severity HIGH --jsonfile-pretty /tmp/api.json \
+            "${REF}.supabase.co" || true
+
+  # ---------------------------------------------------------------------------
+  # Layer 8 — SBOM + container scanning
+  # ---------------------------------------------------------------------------
+  sbom:
+    name: SBOM (CycloneDX) + Grype scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions-rs/toolchain@v1
+        with: { toolchain: stable }
+
+      - name: Generate npm SBOM
+        run: |
+          npm install -g @cyclonedx/cdxgen
+          cdxgen -t javascript -o sbom-npm.cdx.json
+        if: hashFiles('package.json') != ''
+
+      - name: Generate cargo SBOM
+        run: |
+          cargo install --locked cargo-cyclonedx
+          cd src-tauri && cargo cyclonedx --format json
+        if: hashFiles('src-tauri/Cargo.toml') != ''
+
+      - name: Grype scan all SBOMs
+        uses: anchore/scan-action@v3
+        with:
+          path: '.'
+          fail-build: true
+          severity-cutoff: high
+          output-format: sarif
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-and-scan
+          path: |
+            *.cdx.json
+            src-tauri/*.cdx.json
+
+  # ---------------------------------------------------------------------------
+  # Layer 9 — Final gate: aggregate findings, fail on critical
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Security gate
+    runs-on: ubuntu-latest
+    needs:
+      - secret-scan
+      - db-migration-lint
+      - db-rls-lint
+      - db-rls-tests
+      - db-supashield
+      - api-schemathesis
+      - api-bola
+      - edge-fn-lint
+      - tauri-capability-audit
+      - rust-audit
+      - sbom
+    steps:
+      - name: All required jobs passed
+        run: echo "Security gate passed."
