@@ -3,7 +3,7 @@
 ## Pre-flight
 
 ```bash
-cd ~/dev/tauri                  # your Tauri app repo
+cd ~/desktop/travus
 source .audit-env
 ls audit-reports/               # confirm subagent reports exist
 claude --dangerously-skip-permissions

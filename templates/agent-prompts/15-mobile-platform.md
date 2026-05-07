@@ -3,7 +3,7 @@
 ## Pre-flight
 
 ```bash
-cd ~/dev/tauri
+cd ~/desktop/travus
 source .audit-env
 mkdir -p audit-reports
 brew install apktool 2>/dev/null

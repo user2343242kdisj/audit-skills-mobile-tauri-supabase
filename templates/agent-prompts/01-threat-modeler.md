@@ -3,7 +3,7 @@
 ## Pre-flight
 
 ```bash
-cd ~/dev/tauri
+cd ~/desktop/travus
 source .audit-env
 mkdir -p audit-reports
 pip install pytm 2>/dev/null || pipx install pytm

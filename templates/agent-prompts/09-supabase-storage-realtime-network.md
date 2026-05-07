@@ -8,7 +8,7 @@ This terminal runs three merged subagents in a single autonomous pass:
 ## Pre-flight
 
 ```bash
-cd ~/dev/tauri
+cd ~/desktop/travus
 source .audit-env
 mkdir -p audit-reports
 brew install postgresql jq 2>/dev/null

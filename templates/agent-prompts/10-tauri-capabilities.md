@@ -3,7 +3,7 @@
 ## Pre-flight
 
 ```bash
-cd ~/dev/tauri
+cd ~/desktop/travus
 source .audit-env
 mkdir -p audit-reports
 command -v cargo-tauri >/dev/null 2>&1 || cargo install tauri-cli --locked

@@ -10,7 +10,7 @@ All three roles share the same `tauri.conf.json` and `Cargo.toml` surface, so th
 ## Pre-flight
 
 ```bash
-cd ~/dev/tauri
+cd ~/desktop/travus
 source .audit-env
 mkdir -p audit-reports
 # checksec via container — works cross-platform without local install

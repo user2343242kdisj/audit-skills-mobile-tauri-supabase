@@ -23,9 +23,9 @@ Self-contained prompts to paste into individual Claude Code terminals so each su
 15-mobile-platform.md                       ┘  (deeplinks + Keychain/Keystore + cert pinning)
 ```
 
-## One-time setup (in YOUR TAURI APP REPO)
+## One-time setup (in YOUR APP REPO at `~/desktop/travus`)
 
-The audit runs from the **root of your Tauri app repo** (e.g. `~/dev/tauri/`). Every prompt assumes the working directory contains:
+The audit runs from `~/desktop/travus` (your Tauri app repo). Every prompt assumes the working directory contains:
 - `src-tauri/` — Tauri Rust core + capabilities + tauri.conf.json
 - `supabase/` (or accessible via `SUPABASE_DB_URL`) — Edge Functions + migrations + tests
 - `android/` and/or `ios/` if mobile is built in this repo (otherwise mobile agents skip)
@@ -33,7 +33,7 @@ The audit runs from the **root of your Tauri app repo** (e.g. `~/dev/tauri/`). E
 - `audit-reports/` — created on first run, gitignored
 
 ```bash
-cd ~/dev/tauri  # your Tauri app repo root
+cd ~/desktop/travus
 
 # 1. Audit reports directory (gitignored)
 mkdir -p audit-reports
@@ -71,7 +71,7 @@ chmod 600 .audit-env
 
 ```bash
 # Terminal 1
-cd ~/dev/tauri  # your Tauri app repo
+cd ~/desktop/travus
 source .audit-env
 claude --dangerously-skip-permissions  # auto-approve tool calls
 # Then paste the contents of templates/agent-prompts/01-threat-modeler.md
@@ -81,10 +81,10 @@ Wait for `DONE | threat-modeler | …` line. Output: `audit-reports/01-threat-mo
 
 ### Phase 2 — Domain auditors (parallel)
 
-Open 19 separate terminals (or use `tmux`/`zellij` for split-pane). In each:
+Open 14 separate terminals (or use `tmux`/`zellij` for split-pane). In each:
 
 ```bash
-cd ~/dev/tauri  # your Tauri app repo
+cd ~/desktop/travus
 source .audit-env
 claude --dangerously-skip-permissions
 # Then paste the contents of templates/agent-prompts/<NN>-<name>.md
@@ -96,7 +96,7 @@ You can also batch them with `claude -p` (non-interactive):
 
 ```bash
 # In a launch script, looping over Phase 2 prompts (skip 00 and 01):
-cd ~/dev/tauri
+cd ~/desktop/travus
 source .audit-env
 for prompt in $AUDIT_SKILLS_PATH/templates/agent-prompts/0[2-9]-*.md \
               $AUDIT_SKILLS_PATH/templates/agent-prompts/1[0-5]-*.md; do
@@ -111,7 +111,7 @@ echo "All 14 Phase 2 agents complete."
 ### Phase 3 — Orchestrator synthesis (sequential, runs LAST)
 
 ```bash
-cd ~/dev/tauri  # your Tauri app repo
+cd ~/desktop/travus
 source .audit-env
 claude --dangerously-skip-permissions
 # Then paste the contents of templates/agent-prompts/00-orchestrator.md
