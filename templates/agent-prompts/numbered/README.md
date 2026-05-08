@@ -6,7 +6,19 @@ Numbered, paste-direct prompts. Each terminal runs one command:
 exec agent-N.md
 ```
 
-## One-time setup (per machine)
+## Zero-touch setup (recommended)
+
+```bash
+cd ~/desktop/travus
+git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ../audit-skills 2>/dev/null
+claude --dangerously-skip-permissions
+# Paste the contents of:
+#   ../audit-skills/templates/agent-prompts/numbered/agent-0.md
+```
+
+`agent-0` (the **setup-agent**) does everything below for you: installs the wrapper, hardens `.gitignore`, scaffolds `.audit-env`, detects your stack, writes a setup report. After it finishes, you fill in the CHANGEME values in `.audit-env` and run `exec-agent agent-1.md`.
+
+## Manual setup (if you prefer)
 
 ```bash
 # 1. Make the exec script available on your PATH (pick one):
@@ -48,6 +60,7 @@ exec-agent agent-2.md          # terminal 2 → secrets scan
 
 | File | Topic | Phase |
 |---|---|---|
+| `agent-0.md` | **setup-agent** | 0 (run FIRST, ONCE — installs toolchain) |
 | `agent-1.md` | threat-modeler | 1 (run FIRST, sequential) |
 | `agent-2.md` | secrets-scanner | 2 (parallel) |
 | `agent-3.md` | sbom-vuln | 2 |
