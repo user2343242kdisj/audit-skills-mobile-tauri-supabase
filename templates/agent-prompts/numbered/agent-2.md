@@ -141,11 +141,11 @@ REQUIRED INPUTS
 
 PRE-WORKFLOW: Resolve secrets (run BEFORE Step 1)
 
-Resolve every secret you need by shelling out to `op`. If the first call fails, 1Password may be locked — wait for the unlock prompt, then retry. If a required secret is unavailable after retry, write `BLOCKED: op read failed for <secret name> (1Password locked or item missing — verify path 'op://Private/...')` to the report and exit.
+Resolve every secret you need by shelling out to `op`. If the first call fails, 1Password may be locked — wait for the unlock prompt, then retry. If a required secret is unavailable after retry, write `BLOCKED: op read failed for <secret name> (1Password locked or item missing — verify path 'op://Travus/...')` to the report and exit.
 
 ```bash
 # Required for this agent — only fetch what you need:
-GITGUARDIAN_API_KEY=$(op read "op://Private/GitGuardian/api_key" 2>/dev/null) || true
+GITGUARDIAN_API_KEY=$(op read "op://Travus/GitGuardian/api_key (NOT in vault — agent will use TruffleHog/Gitleaks only)" 2>/dev/null) || true
 AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export GITGUARDIAN_API_KEY AUDIT_SKILLS_PATH
 ```

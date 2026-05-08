@@ -162,7 +162,7 @@ WORKFLOW (autonomous; numbered; execute in order)
 ═══════════════════════════════════════════════════════════════════
 
 Required secrets (1Password)
-- `op://Private/Supabase Travus/db_url` → `SUPABASE_DB_URL`
+- `op://Travus/Supabase - Production/connection_string` → `SUPABASE_DB_URL`
 
 PRE-WORKFLOW: Resolve secrets + detect Supabase MCP (run BEFORE Step 1)
 
@@ -175,16 +175,16 @@ Then resolve every secret you need via `op read`. If the first call fails,
 1Password may be locked — wait for the unlock prompt, then retry. If a
 required secret is still unavailable, write `BLOCKED: op read failed for
 <secret name> (1Password locked or item missing — verify path
-'op://Private/...')` to the report and exit.
+'op://Travus/...')` to the report and exit.
 
 ```bash
 # Fetch only what this agent needs:
-SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
+SUPABASE_DB_URL=$(op read "op://Travus/Supabase - Production/connection_string" 2>/dev/null) || true
 AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export SUPABASE_DB_URL AUDIT_SKILLS_PATH
 ```
 
-If `SUPABASE_DB_URL` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL (1Password locked or item missing at op://Private/Supabase Travus/db_url)` to `./audit-reports/05-supabase-rls.md` and exit.
+If `SUPABASE_DB_URL` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL (1Password locked or item missing at op://Travus/Supabase - Production/connection_string)` to `./audit-reports/05-supabase-rls.md` and exit.
 
 1. **Inventory public tables:**
    If Supabase MCP is available, run `mcp__supabase__list_tables` (filter schema=`public`) or `mcp__supabase__execute_sql` with the same query. Otherwise:

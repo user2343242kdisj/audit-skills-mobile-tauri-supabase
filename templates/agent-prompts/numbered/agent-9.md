@@ -335,9 +335,9 @@ WORKFLOW (autonomous; numbered)
 ═══════════════════════════════════════════════════════════════════
 
 Required secrets (1Password)
-- `op://Private/Supabase Travus/db_url` → `SUPABASE_DB_URL` (required)
-- `op://Private/Supabase Travus/project_ref` → `SUPABASE_PROJECT_REF` (required)
-- `op://Private/Supabase Travus/management_api_token` → `SUPABASE_ACCESS_TOKEN` (optional; degrade gracefully)
+- `op://Travus/Supabase - Production/connection_string` → `SUPABASE_DB_URL` (required)
+- `op://Travus/Supabase - Production/server` → `SUPABASE_PROJECT_REF` (required)
+- `op://Travus/Supabase - CLI Access Token/credential` → `SUPABASE_ACCESS_TOKEN` (optional; degrade gracefully)
 
 PRE-WORKFLOW: Resolve secrets + detect Supabase MCP (run BEFORE Step 1)
 
@@ -352,18 +352,18 @@ Then resolve every secret you need via `op read`. If the first call fails,
 1Password may be locked — wait for the unlock prompt, then retry. If a
 required secret is still unavailable, write `BLOCKED: op read failed for
 <secret name> (1Password locked or item missing — verify path
-'op://Private/...')` to the report and exit.
+'op://Travus/...')` to the report and exit.
 
 ```bash
 # Fetch only what this agent needs:
-SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
-SUPABASE_PROJECT_REF=$(op read "op://Private/Supabase Travus/project_ref" 2>/dev/null) || true
-SUPABASE_ACCESS_TOKEN=$(op read "op://Private/Supabase Travus/management_api_token" 2>/dev/null) || true
+SUPABASE_DB_URL=$(op read "op://Travus/Supabase - Production/connection_string" 2>/dev/null) || true
+SUPABASE_PROJECT_REF=$(op read "op://Travus/Supabase - Production/server" 2>/dev/null) || true
+SUPABASE_ACCESS_TOKEN=$(op read "op://Travus/Supabase - CLI Access Token/credential" 2>/dev/null) || true
 AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export SUPABASE_DB_URL SUPABASE_PROJECT_REF SUPABASE_ACCESS_TOKEN AUDIT_SKILLS_PATH
 ```
 
-If `SUPABASE_DB_URL` or `SUPABASE_PROJECT_REF` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL or SUPABASE_PROJECT_REF (1Password locked or item missing at op://Private/Supabase Travus/...)` to `./audit-reports/09-supabase-storage-realtime-network.md` and exit. If `SUPABASE_ACCESS_TOKEN` is unresolved, mark Network Restrictions + region check as `not-available (no Management API token)` and continue.
+If `SUPABASE_DB_URL` or `SUPABASE_PROJECT_REF` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL or SUPABASE_PROJECT_REF (1Password locked or item missing at op://Travus/Supabase - .../...)` to `./audit-reports/09-supabase-storage-realtime-network.md` and exit. If `SUPABASE_ACCESS_TOKEN` is unresolved, mark Network Restrictions + region check as `not-available (no Management API token)` and continue.
 
 ### A. STORAGE
 

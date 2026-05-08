@@ -85,14 +85,14 @@ WORKFLOW (numbered, strictly idempotent)
 
    cat <<'PATHS'
    === Required 1Password item paths (downstream agents will `op read` these) ===
-     op://Private/Supabase Travus/db_url               → SUPABASE_DB_URL
-     op://Private/Supabase Travus/project_ref          → SUPABASE_PROJECT_REF
-     op://Private/Supabase Travus/anon_key             → SUPABASE_ANON_KEY (sb_publishable_*)
-     op://Private/Supabase Travus/service_role_key     → SUPABASE_SERVICE_ROLE_KEY (sb_secret_*)
-     op://Private/Supabase Travus/management_api_token → SUPABASE_ACCESS_TOKEN
-     op://Private/Test Users Travus/user_a_jwt         → USER_A_JWT
-     op://Private/Test Users Travus/user_b_jwt         → USER_B_JWT
-     op://Private/GitGuardian/api_key                  → GITGUARDIAN_API_KEY
+     op://Travus/Supabase - Production/connection_string               → SUPABASE_DB_URL
+     op://Travus/Supabase - Production/server          → SUPABASE_PROJECT_REF
+     op://Travus/Supabase - Production/anon_key (NOT in vault — agent will skip)             → SUPABASE_ANON_KEY (sb_publishable_*)
+     op://Travus/Supabase - Dev Branch/service_role     → SUPABASE_SERVICE_ROLE_KEY (sb_secret_*)
+     op://Travus/Supabase - CLI Access Token/credential → SUPABASE_ACCESS_TOKEN
+     op://Travus/Test Users/user_a_jwt (NOT in vault — agent will skip BOLA)         → USER_A_JWT
+     op://Travus/Test Users/user_b_jwt (NOT in vault — agent will skip BOLA)         → USER_B_JWT
+     op://Travus/GitGuardian/api_key (NOT in vault — agent will use TruffleHog/Gitleaks only)                  → GITGUARDIAN_API_KEY
    PATHS
    ```
 

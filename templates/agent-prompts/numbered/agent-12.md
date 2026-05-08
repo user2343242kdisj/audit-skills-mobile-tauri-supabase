@@ -17,10 +17,10 @@ failed".
 ```bash
 AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 # Optional comparisons — failure does NOT block the audit:
-TAURI_PUBKEY_EXPECTED=$(op read "op://Private/Tauri Travus/updater_pubkey" 2>/dev/null) || true
-APPLE_API_KEY=$(op read "op://Private/Apple Developer/asc_api_key" 2>/dev/null) || true
-APPLE_API_KEY_ID=$(op read "op://Private/Apple Developer/asc_api_key_id" 2>/dev/null) || true
-APPLE_API_ISSUER=$(op read "op://Private/Apple Developer/asc_api_issuer" 2>/dev/null) || true
+TAURI_PUBKEY_EXPECTED=$(op read "op://Travus/Tauri Travus/updater_pubkey (NOT in vault — comparison skipped)" 2>/dev/null) || true
+APPLE_API_KEY=$(op read "op://Travus/Apple Developer/asc_api_key (optional)" 2>/dev/null) || true
+APPLE_API_KEY_ID=$(op read "op://Travus/Apple Developer/asc_api_key_id (optional)" 2>/dev/null) || true
+APPLE_API_ISSUER=$(op read "op://Travus/Apple Developer/asc_api_issuer (optional)" 2>/dev/null) || true
 export AUDIT_SKILLS_PATH TAURI_PUBKEY_EXPECTED APPLE_API_KEY \
        APPLE_API_KEY_ID APPLE_API_ISSUER
 ```
@@ -525,12 +525,12 @@ B2. **Embedded pubkey verification (run only if a release binary exists):**
    # Compare embedded pubkey against expected (from 1Password, resolved in PRE-WORKFLOW):
    if [ -n "$TAURI_PUBKEY_EXPECTED" ]; then
      if grep -qF "$TAURI_PUBKEY_EXPECTED" /tmp/upd-pubkey.txt; then
-       echo "MATCH: embedded pubkey matches op://Private/Tauri Travus/updater_pubkey" >> /tmp/upd-pubkey.txt
+       echo "MATCH: embedded pubkey matches op://Travus/Tauri Travus/updater_pubkey (NOT in vault — comparison skipped)" >> /tmp/upd-pubkey.txt
      else
-       echo "[CRITICAL] MISMATCH: embedded pubkey does NOT match op://Private/Tauri Travus/updater_pubkey" >> /tmp/upd-pubkey.txt
+       echo "[CRITICAL] MISMATCH: embedded pubkey does NOT match op://Travus/Tauri Travus/updater_pubkey (NOT in vault — comparison skipped)" >> /tmp/upd-pubkey.txt
      fi
    else
-     echo "skipped: op read failed for op://Private/Tauri Travus/updater_pubkey" >> /tmp/upd-pubkey.txt
+     echo "skipped: op read failed for op://Travus/Tauri Travus/updater_pubkey (NOT in vault — comparison skipped)" >> /tmp/upd-pubkey.txt
    fi
    ```
    Note in report: pubkey embedded should match the published key on a trusted host. The comparison is against `$TAURI_PUBKEY_EXPECTED` resolved at PRE-WORKFLOW from 1Password; if the `op read` failed, the comparison is "skipped" and the human reviewer must cross-check manually.
@@ -627,7 +627,7 @@ C5. **macOS — Hardened Runtime + notarization (best-effort, skip silently if n
      echo "SKIP: codesign unavailable (not on macOS)" > /tmp/bin-mac-codesign.txt
    fi
    ```
-   Note: `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` env vars (used by `xcrun notarytool` in CI) are now resolved from 1Password at PRE-WORKFLOW (op://Private/Apple Developer/*) — no `.audit-env` involved. If those `op read` calls failed in PRE-WORKFLOW, this audit step does not require them (read-only inspection of the existing signed `.app` only); record the absence as "skipped: op read failed for op://Private/Apple Developer/*" in the report when reviewing the CI signing pipeline configuration.
+   Note: `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` env vars (used by `xcrun notarytool` in CI) are now resolved from 1Password at PRE-WORKFLOW (op://Travus/Apple Developer/* (optional)) — no `.audit-env` involved. If those `op read` calls failed in PRE-WORKFLOW, this audit step does not require them (read-only inspection of the existing signed `.app` only); record the absence as "skipped: op read failed for op://Travus/Apple Developer/* (optional)" in the report when reviewing the CI signing pipeline configuration.
 
 C6. **Windows — signature (best-effort, requires osslsigncode or sigcheck):**
    ```bash
@@ -709,7 +709,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing local input (e.g., src-tauri/ not found) → BLOCKED + exit. 1Password `op read` failures for the optional updater/signing comparisons MUST NOT block — record as "skipped: op read failed for op://Private/Tauri Travus/updater_pubkey" (or the relevant Apple Developer path) and continue with local-file checks.
+- NEVER ask the user. Missing local input (e.g., src-tauri/ not found) → BLOCKED + exit. 1Password `op read` failures for the optional updater/signing comparisons MUST NOT block — record as "skipped: op read failed for op://Travus/Tauri Travus/updater_pubkey (NOT in vault — comparison skipped)" (or the relevant Apple Developer path) and continue with local-file checks.
 - NEVER destructive ops. NEVER push to git.
 - NEVER write outside ./audit-reports/, /tmp/, ./sbom/.
 - NEVER print secret values.

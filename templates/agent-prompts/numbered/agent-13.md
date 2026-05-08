@@ -167,12 +167,12 @@ PRE-WORKFLOW: Resolve paths + (optionally) MobSF key
 
 ```bash
 AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
-MOBSF_API_KEY=$(op read "op://Private/MobSF/api_key" 2>/dev/null) || true
+MOBSF_API_KEY=$(op read "op://Travus/MobSF/api_key (optional)" 2>/dev/null) || true
 export AUDIT_SKILLS_PATH MOBSF_API_KEY
 ```
 
 The MobSF key is optional. If unset, the agent skips the MobSF step
-and notes "skipped: MobSF API key not available (op://Private/MobSF/api_key)".
+and notes "skipped: MobSF API key not available (op://Travus/MobSF/api_key (optional))".
 
 1. **Locate bundles:**
    ```bash
@@ -185,7 +185,7 @@ and notes "skipped: MobSF API key not available (op://Private/MobSF/api_key)".
 2. **Optional MobSF (Docker):**
    ```bash
    if [ -z "$MOBSF_API_KEY" ]; then
-     echo "MobSF analysis skipped — no API key in 1Password (op://Private/MobSF/api_key)" \
+     echo "MobSF analysis skipped — no API key in 1Password (op://Travus/MobSF/api_key (optional))" \
        > /tmp/mobsf-skip.txt
    fi
    if [ -n "$MOBSF_API_KEY" ] && command -v docker >/dev/null 2>&1; then

@@ -64,19 +64,19 @@ op vault list 2>&1 | head -5
 
 The agents resolve these paths via `op read` at runtime. Create the items in your `Private` vault (or update the paths in each agent prompt):
 
-| Path | Used by |
-|---|---|
-| `op://Private/Supabase Travus/db_url` | agents 5, 6, 8, 9 |
-| `op://Private/Supabase Travus/project_ref` | agents 4, 6, 9 |
-| `op://Private/Supabase Travus/anon_key` | agents 4, 6 |
-| `op://Private/Supabase Travus/service_role_key` | (sensitive — used only when MCP is unavailable) |
-| `op://Private/Supabase Travus/management_api_token` | agents 6, 9 |
-| `op://Private/Test Users Travus/user_a_jwt` | agent 4 (BOLA harness) |
-| `op://Private/Test Users Travus/user_b_jwt` | agent 4 (BOLA harness) |
-| `op://Private/GitGuardian/api_key` | agent 2 |
-| `op://Private/MobSF/api_key` | agent 13 (optional) |
-| `op://Private/Tauri Travus/updater_pubkey` | agent 12 (optional) |
-| `op://Private/Apple Developer/asc_api_key` | agent 12 (optional) |
+| Path | Used by | Status in your vault |
+|---|---|---|
+| `op://Travus/Supabase - Production/connection_string` | agents 5, 6, 8, 9 | ✓ present |
+| `op://Travus/Supabase - Production/server` (project ref via `db.<ref>.supabase.co`) | agents 4, 6, 9 | ✓ derived from server |
+| `op://Travus/Supabase - Production/anon_key` | agents 4, 6 | ✗ NOT in vault — agent skips with note |
+| `op://Travus/Supabase - Dev Branch/service_role` | (sensitive — dev only) | ✓ dev-branch only |
+| `op://Travus/Supabase - CLI Access Token/credential` | agents 6, 9 | ✓ present |
+| `op://Travus/Test Users/user_a_jwt` | agent 4 (BOLA) | ✗ NOT in vault — agent skips BOLA |
+| `op://Travus/Test Users/user_b_jwt` | agent 4 (BOLA) | ✗ NOT in vault — agent skips BOLA |
+| `op://Travus/GitGuardian/api_key` | agent 2 | ✗ NOT in vault — uses TruffleHog/Gitleaks only |
+| `op://Travus/MobSF/api_key` | agent 13 | ✗ optional |
+| `op://Travus/Apple Developer/asc_api_key` | agent 12 (optional) | check vault |
+
 
 > **Note:** the script is named `exec-agent` (not `exec`) when installed on PATH because `exec` is a built-in shell keyword. Inside this directory the script file is named `exec` for convenience — but you call it as `exec-agent` from any terminal.
 
