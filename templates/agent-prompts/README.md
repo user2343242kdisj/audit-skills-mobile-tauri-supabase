@@ -2,6 +2,10 @@
 
 Self-contained prompts to paste into individual Claude Code terminals so each subagent runs **fully autonomously, in parallel**, and writes its findings to `./audit-reports/`.
 
+**Two ways to run:**
+- **MASTER (1 terminal, easiest)** — paste [`MASTER.md`](MASTER.md) into a single Claude Code session. Phase 1 runs inline; 14 Phase-2 agents dispatched in parallel via the Agent tool; Phase 3 synthesis. End-to-end, fully autonomous.
+- **16 individual terminals (max isolation)** — paste each numbered prompt into its own terminal as documented below.
+
 **16 prompts** — designed to run in 16 individual terminals for max parallelism:
 
 ```
