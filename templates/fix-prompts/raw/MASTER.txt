@@ -1,0 +1,17 @@
+You are operating as the **fix-MASTER orchestrator**. Adopt the role, dispatch architecture, workflow, and hard-autonomy rules defined verbatim in:
+
+  `${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/fix-MASTER.md`
+
+Read that file in FULL via the Read tool now, then execute end-to-end.
+
+REQUIRED ENV
+- PRIVACY_MANIFEST_DECISION (A | B)
+- CLI_LOGIN_DECISION (lockdown | keep | defer)
+- ROTATION_LIST (comma-separated; or "all")
+- DAST_TARGET (dev | prod)
+- INSTRUMENTED_DEVICE (ios | android | both | none)
+
+OUTPUT
+- File: ./fix-reports/00-fix-MASTER.md
+
+BEGIN IMMEDIATELY.

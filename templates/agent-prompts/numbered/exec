@@ -24,19 +24,34 @@ PROMPT_FILE="$1"
 
 # Resolve the prompt path. Order:
 #   1. Direct path (e.g. ./audit/templates/agent-prompts/numbered/agent-1.md)
-#   2. ./audit/templates/agent-prompts/numbered/$1   (canonical sub-folder layout)
-#   3. ${AUDIT_SKILLS_PATH:-./audit}/templates/agent-prompts/numbered/$1   (env override)
-#   4. ../audit-skills/templates/agent-prompts/numbered/$1   (back-compat sibling layout)
+#   2. ./audit/templates/agent-prompts/numbered/$1            (audit prompts, canonical)
+#   3. ./audit/templates/fix-prompts/numbered/$1              (fix prompts, canonical)
+#   4. ./audit/templates/fix-prompts/$1                       (fix-MASTER.md / fix-setup.md at root)
+#   5. ${AUDIT_SKILLS_PATH:-./audit}/templates/agent-prompts/numbered/$1  (env override, audit)
+#   6. ${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/numbered/$1    (env override, fix)
+#   7. ${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/$1             (env override, fix root)
+#   8. ../audit-skills/templates/agent-prompts/numbered/$1    (back-compat sibling layout, audit)
+#   9. ../audit-skills/templates/fix-prompts/numbered/$1      (back-compat sibling layout, fix)
 if [ -f "$PROMPT_FILE" ]; then
   RESOLVED="$PROMPT_FILE"
 elif [ -f "./audit/templates/agent-prompts/numbered/$PROMPT_FILE" ]; then
   RESOLVED="./audit/templates/agent-prompts/numbered/$PROMPT_FILE"
+elif [ -f "./audit/templates/fix-prompts/numbered/$PROMPT_FILE" ]; then
+  RESOLVED="./audit/templates/fix-prompts/numbered/$PROMPT_FILE"
+elif [ -f "./audit/templates/fix-prompts/$PROMPT_FILE" ]; then
+  RESOLVED="./audit/templates/fix-prompts/$PROMPT_FILE"
 elif [ -f "${AUDIT_SKILLS_PATH:-./audit}/templates/agent-prompts/numbered/$PROMPT_FILE" ]; then
   RESOLVED="${AUDIT_SKILLS_PATH:-./audit}/templates/agent-prompts/numbered/$PROMPT_FILE"
+elif [ -f "${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/numbered/$PROMPT_FILE" ]; then
+  RESOLVED="${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/numbered/$PROMPT_FILE"
+elif [ -f "${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/$PROMPT_FILE" ]; then
+  RESOLVED="${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/$PROMPT_FILE"
 elif [ -f "../audit-skills/templates/agent-prompts/numbered/$PROMPT_FILE" ]; then
   RESOLVED="../audit-skills/templates/agent-prompts/numbered/$PROMPT_FILE"
+elif [ -f "../audit-skills/templates/fix-prompts/numbered/$PROMPT_FILE" ]; then
+  RESOLVED="../audit-skills/templates/fix-prompts/numbered/$PROMPT_FILE"
 else
-  echo "exec: cannot find $PROMPT_FILE (looked in ., ./audit/templates/agent-prompts/numbered/, \$AUDIT_SKILLS_PATH/templates/agent-prompts/numbered/, and ../audit-skills/templates/agent-prompts/numbered/)" >&2
+  echo "exec: cannot find $PROMPT_FILE (looked in ., audit-prompts and fix-prompts under ./audit/, \$AUDIT_SKILLS_PATH, and ../audit-skills/)" >&2
   exit 2
 fi
 

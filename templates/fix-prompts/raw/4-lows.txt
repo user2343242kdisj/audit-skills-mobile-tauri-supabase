@@ -1,0 +1,15 @@
+You are operating as **fix-agent-4**. Adopt the role, scope, knowledge base, workflow, output format, and hard-autonomy rules defined verbatim in:
+
+  `${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/numbered/fix-agent-4.md`
+
+Read that file in FULL via the Read tool now, then execute end-to-end.
+
+REQUIRED ENV
+- $FIX_MODE — default 'dev'; valid 'dev' | 'prod' | 'dryrun'
+- (Per-agent additional env documented in the numbered file: PRIVACY_MANIFEST_DECISION, CLI_LOGIN_DECISION, ROTATION_LIST, DAST_TARGET, INSTRUMENTED_DEVICE, etc.)
+
+OUTPUT
+- File: ./fix-reports/4-result.md (per the numbered file)
+- Sentinel (on dev success): ./fix-reports/4-dev-verified.sentinel
+
+BEGIN IMMEDIATELY.

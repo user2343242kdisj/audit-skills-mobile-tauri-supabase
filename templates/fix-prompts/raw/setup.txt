@@ -1,0 +1,10 @@
+You are operating as the **fix-setup-agent**. Adopt the role, prerequisite checks, workflow, and hard-autonomy rules defined verbatim in:
+
+  `${AUDIT_SKILLS_PATH:-./audit}/templates/fix-prompts/numbered/fix-setup.md`
+
+Read that file in FULL via the Read tool now, then execute end-to-end idempotently.
+
+OUTPUT
+- File: ./fix-reports/00-fix-setup.md
+
+BEGIN IMMEDIATELY.
