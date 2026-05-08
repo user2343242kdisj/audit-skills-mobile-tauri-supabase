@@ -4,7 +4,7 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
 - Reports directory: ./audit-reports/
-- Env: sourced from .audit-env in parent shell
+- Secrets: optional MOBSF_API_KEY via 1Password if running MobSF Docker locally. Most checks read APK/IPA bundles directly. NO `.audit-env` needed.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -163,6 +163,17 @@ REQUIRED INPUT
 - A mobile bundle in the repo: `*.apk`, `*.aab`, `*.ipa`, or `*.app` directory under `android/`, `ios/`, `build/`, `dist/`, or repo root.
 - If neither `android/` nor `ios/` exists AND no APK/IPA is found, write `BLOCKED: no mobile source (android/ and ios/ absent)` to `./audit-reports/13-mobile-static.md` and exit.
 
+PRE-WORKFLOW: Resolve paths + (optionally) MobSF key
+
+```bash
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+MOBSF_API_KEY=$(op read "op://Private/MobSF/api_key" 2>/dev/null) || true
+export AUDIT_SKILLS_PATH MOBSF_API_KEY
+```
+
+The MobSF key is optional. If unset, the agent skips the MobSF step
+and notes "skipped: MobSF API key not available (op://Private/MobSF/api_key)".
+
 1. **Locate bundles:**
    ```bash
    find . -type f \( -name '*.apk' -o -name '*.aab' -o -name '*.ipa' \) 2>/dev/null > /tmp/mob-bundles.txt
@@ -173,6 +184,10 @@ REQUIRED INPUT
 
 2. **Optional MobSF (Docker):**
    ```bash
+   if [ -z "$MOBSF_API_KEY" ]; then
+     echo "MobSF analysis skipped — no API key in 1Password (op://Private/MobSF/api_key)" \
+       > /tmp/mobsf-skip.txt
+   fi
    if [ -n "$MOBSF_API_KEY" ] && command -v docker >/dev/null 2>&1; then
      docker run -d --rm -p 8000:8000 --name mobsf_audit \
        opensecurity/mobile-security-framework-mobsf:latest >/dev/null 2>&1

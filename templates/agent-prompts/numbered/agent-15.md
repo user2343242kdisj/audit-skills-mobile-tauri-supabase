@@ -4,7 +4,7 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
 - Reports directory: ./audit-reports/
-- Env: sourced from .audit-env in parent shell
+- Secrets: NONE required (operates on local source + extracted bundles). NO `.audit-env` needed.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -386,7 +386,14 @@ WORKFLOW (autonomous; numbered)
 ═══════════════════════════════════════════════════════════════════
 
 REQUIRED INPUT
-- Mobile source under `android/` and/or `ios/`. If neither exists AND no `*.apk`/`*.ipa` found, write `BLOCKED: no mobile source (android/ and ios/ absent)` to `./audit-reports/15-mobile-platform.md` and exit.
+- Mobile source under `android/` and/or `ios/`. If neither exists AND no `*.apk`/`*.ipa` found, write `BLOCKED: no mobile source — neither android/ nor ios/ present` to `./audit-reports/15-mobile-platform.md` and exit.
+
+PRE-WORKFLOW: Resolve paths
+
+```bash
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export AUDIT_SKILLS_PATH
+```
 
 ### A — Deeplinks
 
@@ -556,6 +563,6 @@ HARD AUTONOMY RULES
 - NEVER modify `android/`, `ios/`, or `src-tauri/` source.
 - NEVER fetch assetlinks.json / AASA from internal hosts behind VPN unless `$AUDIT_ALLOW_INTERNAL=1`.
 - NEVER invent findings.
-- If both `android/` AND `ios/` are absent AND no APK/IPA exists → BLOCKED message + exit (per REQUIRED INPUT).
+- If both `android/` AND `ios/` are absent AND no APK/IPA exists → `BLOCKED: no mobile source — neither android/ nor ios/ present` + exit (per REQUIRED INPUT).
 - If a host is unreachable for AASA / assetlinks fetch, record `UNREACHABLE` for that host and continue.
 - BEGIN IMMEDIATELY.

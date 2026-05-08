@@ -4,7 +4,7 @@ CONTEXT
 - Working directory: ~/desktop/travus (the app repo).
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
 - Reports directory: ./audit-reports/
-- Env: source from .audit-env (must already be sourced in the parent shell).
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt; wait for it then continue.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -138,6 +138,19 @@ WORKFLOW (autonomous; numbered; execute in order)
 REQUIRED INPUTS
 - `$GITGUARDIAN_API_KEY` — if missing, fall back to TruffleHog + Gitleaks only (note in report).
 - Working directory must be a git repo. If not: write `BLOCKED: not a git repo` and exit.
+
+PRE-WORKFLOW: Resolve secrets (run BEFORE Step 1)
+
+Resolve every secret you need by shelling out to `op`. If the first call fails, 1Password may be locked — wait for the unlock prompt, then retry. If a required secret is unavailable after retry, write `BLOCKED: op read failed for <secret name> (1Password locked or item missing — verify path 'op://Private/...')` to the report and exit.
+
+```bash
+# Required for this agent — only fetch what you need:
+GITGUARDIAN_API_KEY=$(op read "op://Private/GitGuardian/api_key" 2>/dev/null) || true
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export GITGUARDIAN_API_KEY AUDIT_SKILLS_PATH
+```
+
+If the Supabase MCP is connected (i.e. `mcp__supabase__*` tools are available in this session), the agent CAN cross-check whether leaked Supabase keys are still active by calling MCP introspection tools (e.g. project listing, key status) instead of (or in addition to) TruffleHog `--only-verified`. Otherwise rely on `op read` for `GITGUARDIAN_API_KEY` and TruffleHog's `--only-verified` flag.
 
 1. **Working tree scan (3 tools cross-checked):**
    ```bash

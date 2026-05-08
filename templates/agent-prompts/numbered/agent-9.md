@@ -4,7 +4,8 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts
 - Reports directory: ./audit-reports/
-- Env: sourced from .audit-env in parent shell
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
+- Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable. Note: `testssl.sh` and the Management API curl calls have NO MCP equivalent — keep those bash calls.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -333,13 +334,41 @@ CRITICAL FINDINGS
 WORKFLOW (autonomous; numbered)
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED INPUT
-- `$SUPABASE_DB_URL` and `$SUPABASE_PROJECT_REF`. If either unset, write `BLOCKED: SUPABASE_DB_URL or SUPABASE_PROJECT_REF not set` to `./audit-reports/09-supabase-storage-realtime-network.md` and exit.
-- `$SUPABASE_ACCESS_TOKEN` is optional. If unset, mark Network Restrictions + region check as `not-available (no Management API token)` and continue.
+Required secrets (1Password)
+- `op://Private/Supabase Travus/db_url` → `SUPABASE_DB_URL` (required)
+- `op://Private/Supabase Travus/project_ref` → `SUPABASE_PROJECT_REF` (required)
+- `op://Private/Supabase Travus/management_api_token` → `SUPABASE_ACCESS_TOKEN` (optional; degrade gracefully)
+
+PRE-WORKFLOW: Resolve secrets + detect Supabase MCP (run BEFORE Step 1)
+
+First, detect whether Supabase MCP tools are available in this session.
+If `mcp__supabase__*` tools are listed, prefer them throughout the
+workflow (they avoid leaking the DB URL into shell history and use
+the MCP server's permissioning). Note: `testssl.sh` and the Management
+API curl calls have NO MCP equivalent — keep those bash calls but use
+the resolved env variables.
+
+Then resolve every secret you need via `op read`. If the first call fails,
+1Password may be locked — wait for the unlock prompt, then retry. If a
+required secret is still unavailable, write `BLOCKED: op read failed for
+<secret name> (1Password locked or item missing — verify path
+'op://Private/...')` to the report and exit.
+
+```bash
+# Fetch only what this agent needs:
+SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
+SUPABASE_PROJECT_REF=$(op read "op://Private/Supabase Travus/project_ref" 2>/dev/null) || true
+SUPABASE_ACCESS_TOKEN=$(op read "op://Private/Supabase Travus/management_api_token" 2>/dev/null) || true
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export SUPABASE_DB_URL SUPABASE_PROJECT_REF SUPABASE_ACCESS_TOKEN AUDIT_SKILLS_PATH
+```
+
+If `SUPABASE_DB_URL` or `SUPABASE_PROJECT_REF` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL or SUPABASE_PROJECT_REF (1Password locked or item missing at op://Private/Supabase Travus/...)` to `./audit-reports/09-supabase-storage-realtime-network.md` and exit. If `SUPABASE_ACCESS_TOKEN` is unresolved, mark Network Restrictions + region check as `not-available (no Management API token)` and continue.
 
 ### A. STORAGE
 
 1. **Bucket inventory:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select id, name, owner, public, allowed_mime_types::text, file_size_limit, created_at
@@ -348,6 +377,7 @@ REQUIRED INPUT
    Flag every bucket where `public=true` → **MEDIUM**, `allowed_mime_types is null or '{}'` → **HIGH** (XSS/phishing primitive via uploaded HTML/SVG), `file_size_limit is null` → **LOW** (upload-DoS).
 
 2. **Policies on `storage.objects`:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select policyname, cmd, roles::text, qual, with_check
@@ -358,6 +388,7 @@ REQUIRED INPUT
    For each: missing `bucket_id = ...` filter in `qual` → policy bleeds across buckets → **HIGH**. `qual = 'true'` or null on SELECT for `authenticated` → **CRITICAL**.
 
 3. **Splinter rule 0025 (public_bucket_allows_listing):**
+   If Supabase MCP is available, run `mcp__supabase__get_advisors` (type=`security`) and filter to `0025_public_bucket_allows_listing`. Otherwise:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/supabase/splinter/main/splinter.sql -o /tmp/splinter.sql
    psql "$SUPABASE_DB_URL" -f /tmp/splinter.sql > /dev/null 2>&1
@@ -368,6 +399,7 @@ REQUIRED INPUT
    Any hit → **HIGH** (mass enumeration risk).
 
 4. **`storage.buckets` RLS itself:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select relrowsecurity, relforcerowsecurity
@@ -402,6 +434,7 @@ REQUIRED INPUT
    Any channel without `private: true` → **HIGH** (public channel; any anon client with the URL joins).
 
 7. **`realtime.messages` RLS policies:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select policyname, cmd, roles::text, qual, with_check
@@ -412,6 +445,7 @@ REQUIRED INPUT
    Zero policies + private channels in code → channels deny-by-default (functional bug, not security) but flag as **MEDIUM** misconfig. Any policy with `qual='true'` on SELECT for `authenticated` → **CRITICAL** (every authenticated user reads every broadcast).
 
 8. **Realtime publication membership (postgres-changes leak surface):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same queries. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select pubname, pubowner::regrole, puballtables, pubinsert, pubupdate, pubdelete
@@ -424,6 +458,7 @@ REQUIRED INPUT
    `puballtables=true` → **CRITICAL** (every change in every table fan-outs to subscribers).
 
 9. **For each table in `supabase_realtime`, verify RLS is on:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select t.schemaname, t.tablename, t.rowsecurity
@@ -512,7 +547,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing env → BLOCKED + exit.
+- NEVER ask the user. Missing secret → BLOCKED + exit.
 - NEVER destructive ops. NEVER push to git.
 - NEVER write outside ./audit-reports/, /tmp/, ./sbom/.
 - NEVER print secret values.

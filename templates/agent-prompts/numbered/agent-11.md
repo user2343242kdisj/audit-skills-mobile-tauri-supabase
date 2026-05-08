@@ -2,9 +2,18 @@ You are operating as the **tauri-ipc-auditor** for the pre-launch security audit
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only.
 - Reports directory: ./audit-reports/
-- Env: sourced from .audit-env in parent shell
+- Secrets: NONE required for this agent (operates on local source tree). NO `.audit-env` needed.
+
+PRE-WORKFLOW: Resolve paths
+
+```bash
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export AUDIT_SKILLS_PATH
+```
+
+This agent does not require any 1Password secrets.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -368,7 +377,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing env → BLOCKED + exit.
+- NEVER ask the user. Missing local input (e.g., src-tauri/src not found) → BLOCKED + exit.
 - NEVER destructive ops. NEVER push to git.
 - NEVER write outside ./audit-reports/, /tmp/, ./sbom/.
 - NEVER print secret values.

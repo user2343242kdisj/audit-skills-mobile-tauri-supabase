@@ -4,7 +4,8 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh)
 - Reports directory: ./audit-reports/
-- Env: must be sourced from .audit-env in the parent shell
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
+- Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -160,10 +161,33 @@ ATTACK-PATH ANALYSIS (manual)
 WORKFLOW (autonomous; numbered; execute in order)
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED INPUT
-- `$SUPABASE_DB_URL`. If unset, write `BLOCKED: SUPABASE_DB_URL not set` to `./audit-reports/05-supabase-rls.md` and exit.
+Required secrets (1Password)
+- `op://Private/Supabase Travus/db_url` → `SUPABASE_DB_URL`
+
+PRE-WORKFLOW: Resolve secrets + detect Supabase MCP (run BEFORE Step 1)
+
+First, detect whether Supabase MCP tools are available in this session.
+If `mcp__supabase__*` tools are listed, prefer them throughout the
+workflow (they avoid leaking the DB URL into shell history and use
+the MCP server's permissioning).
+
+Then resolve every secret you need via `op read`. If the first call fails,
+1Password may be locked — wait for the unlock prompt, then retry. If a
+required secret is still unavailable, write `BLOCKED: op read failed for
+<secret name> (1Password locked or item missing — verify path
+'op://Private/...')` to the report and exit.
+
+```bash
+# Fetch only what this agent needs:
+SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export SUPABASE_DB_URL AUDIT_SKILLS_PATH
+```
+
+If `SUPABASE_DB_URL` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL (1Password locked or item missing at op://Private/Supabase Travus/db_url)` to `./audit-reports/05-supabase-rls.md` and exit.
 
 1. **Inventory public tables:**
+   If Supabase MCP is available, run `mcp__supabase__list_tables` (filter schema=`public`) or `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select schemaname, tablename, rowsecurity from pg_tables where schemaname='public' order by tablename" \
@@ -171,6 +195,7 @@ REQUIRED INPUT
    ```
 
 2. **Pull Splinter & run security ERROR rules:**
+   If Supabase MCP is available, run `mcp__supabase__get_advisors` (type=`security`) for the canonical Splinter pass — this avoids the curl + psql roundtrip. Otherwise:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/supabase/splinter/main/splinter.sql -o /tmp/splinter.sql
    psql "$SUPABASE_DB_URL" -f /tmp/splinter.sql > /dev/null 2>&1
@@ -180,6 +205,7 @@ REQUIRED INPUT
    ```
 
 3. **Splinter WARN/INFO rules relevant to RLS:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select name, level, title, detail from splinter where name in (
@@ -192,6 +218,7 @@ REQUIRED INPUT
    ```
 
 4. **List all RLS policies:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select tablename, policyname, cmd, roles::text, qual, with_check
@@ -237,7 +264,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing env → BLOCKED + exit.
+- NEVER ask the user. Missing secret → BLOCKED + exit.
 - NEVER destructive ops. NEVER push to git.
 - NEVER write outside ./audit-reports/, /tmp/.
 - NEVER print secret values — redact (sb_secret_***...REDACTED).

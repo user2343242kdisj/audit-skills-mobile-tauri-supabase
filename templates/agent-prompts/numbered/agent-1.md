@@ -4,7 +4,7 @@ CONTEXT
 - Working directory: ~/desktop/travus (the app repo).
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
 - Reports directory: ./audit-reports/
-- Env: source from .audit-env (must already be sourced in the parent shell).
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt; wait for it then continue.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -171,6 +171,17 @@ WORKFLOW (autonomous; numbered; execute in order)
 
 REQUIRED INPUTS
 - None mandatory. If `src-tauri/` does not exist, write `BLOCKED: not a Tauri app repo (no src-tauri/)` to the report and exit.
+
+PRE-WORKFLOW: Resolve secrets (run BEFORE Step 1)
+
+Resolve every secret you need by shelling out to `op`. If the first call fails, 1Password may be locked — wait for the unlock prompt, then retry. If a required secret is unavailable after retry, write `BLOCKED: op read failed for <secret name> (1Password locked or item missing — verify path 'op://Private/...')` to the report and exit.
+
+```bash
+# threat-modeler uses none of the secrets directly, but resolves AUDIT_SKILLS_PATH
+# (Optional Supabase context only if you want to introspect schema via MCP)
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export AUDIT_SKILLS_PATH
+```
 
 1. **Discover the stack** programmatically:
    - Tauri version: `grep -E '^tauri\s*=' src-tauri/Cargo.toml`

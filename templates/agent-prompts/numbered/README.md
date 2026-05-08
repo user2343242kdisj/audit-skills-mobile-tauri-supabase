@@ -16,7 +16,7 @@ claude --dangerously-skip-permissions
 #   ../audit-skills/templates/agent-prompts/numbered/agent-0.md
 ```
 
-`agent-0` (the **setup-agent**) does everything below for you: installs the wrapper, hardens `.gitignore`, scaffolds `.audit-env`, detects your stack, writes a setup report. After it finishes, you fill in the CHANGEME values in `.audit-env` and run `exec-agent agent-1.md`.
+`agent-0` (the **setup-agent**) does everything below for you: installs the wrapper, hardens `.gitignore`, verifies `op` CLI authentication, lists expected 1Password item paths, detects your stack, writes a setup report. **No `.audit-env` is created** — secrets live in 1Password and are resolved at runtime via `op read`.
 
 ## Manual setup (if you prefer)
 
@@ -27,14 +27,33 @@ sudo cp ../audit-skills/templates/agent-prompts/numbered/exec /usr/local/bin/exe
 mkdir -p ~/.local/bin && cp ../audit-skills/templates/agent-prompts/numbered/exec ~/.local/bin/exec-agent
 export PATH="$HOME/.local/bin:$PATH"   # add to ~/.zshrc
 
-# 2. Configure env in your app repo (one time)
+# 2. Clone audit-skills + create reports dir (one time)
 cd ~/desktop/travus
 [ -d ../audit-skills ] || git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ../audit-skills
 mkdir -p audit-reports
-echo "audit-reports/" >> .gitignore
-echo ".audit-env" >> .gitignore
-chmod 600 .audit-env  # after you fill it
+grep -qxF "audit-reports/" .gitignore 2>/dev/null || echo "audit-reports/" >> .gitignore
+
+# 3. Verify 1Password CLI is authenticated (op session unlocks on first read each Claude session)
+op vault list 2>&1 | head -5
 ```
+
+### Required 1Password items
+
+The agents resolve these paths via `op read` at runtime. Create the items in your `Private` vault (or update the paths in each agent prompt):
+
+| Path | Used by |
+|---|---|
+| `op://Private/Supabase Travus/db_url` | agents 5, 6, 8, 9 |
+| `op://Private/Supabase Travus/project_ref` | agents 4, 6, 9 |
+| `op://Private/Supabase Travus/anon_key` | agents 4, 6 |
+| `op://Private/Supabase Travus/service_role_key` | (sensitive — used only when MCP is unavailable) |
+| `op://Private/Supabase Travus/management_api_token` | agents 6, 9 |
+| `op://Private/Test Users Travus/user_a_jwt` | agent 4 (BOLA harness) |
+| `op://Private/Test Users Travus/user_b_jwt` | agent 4 (BOLA harness) |
+| `op://Private/GitGuardian/api_key` | agent 2 |
+| `op://Private/MobSF/api_key` | agent 13 (optional) |
+| `op://Private/Tauri Travus/updater_pubkey` | agent 12 (optional) |
+| `op://Private/Apple Developer/asc_api_key` | agent 12 (optional) |
 
 > **Note:** the script is named `exec-agent` (not `exec`) when installed on PATH because `exec` is a built-in shell keyword. Inside this directory the script file is named `exec` for convenience — but you call it as `exec-agent` from any terminal.
 
@@ -44,13 +63,11 @@ Open 16 terminals (or `tmux` panes). In each:
 
 ```bash
 cd ~/desktop/travus
-source .audit-env
 exec-agent agent-1.md          # terminal 1 → threat model
 ```
 
 ```bash
 cd ~/desktop/travus
-source .audit-env
 exec-agent agent-2.md          # terminal 2 → secrets scan
 ```
 
@@ -90,7 +107,8 @@ Terminal 16: exec-agent agent-16.md         # ← synthesis; produces audit-repo
 
 ```bash
 cd ~/desktop/travus
-source .audit-env
+# Trigger 1Password unlock once (any op read in foreground first)
+op vault list >/dev/null
 for n in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   log="audit-reports/agent-$n.log"
   ( exec-agent "agent-$n.md" > "$log" 2>&1 ) &

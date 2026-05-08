@@ -4,7 +4,8 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh)
 - Reports directory: ./audit-reports/
-- Env: must be sourced from .audit-env in the parent shell
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
+- Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -125,12 +126,40 @@ REMEDIATION
 WORKFLOW (autonomous; numbered; execute in order)
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED INPUT
-- `$SUPABASE_PROJECT_REF` and `$SUPABASE_ANON_KEY`. If either is unset, write `BLOCKED: SUPABASE_PROJECT_REF or SUPABASE_ANON_KEY not set` to `./audit-reports/06-supabase-auth.md` and exit.
-- `$SUPABASE_DB_URL` is optional; degrade gracefully (note "DB queries skipped").
-- `$SUPABASE_ACCESS_TOKEN` is optional; degrade gracefully on management API.
+Required secrets (1Password)
+- `op://Private/Supabase Travus/project_ref` → `SUPABASE_PROJECT_REF` (required)
+- `op://Private/Supabase Travus/anon_key` → `SUPABASE_ANON_KEY` (required)
+- `op://Private/Supabase Travus/db_url` → `SUPABASE_DB_URL` (optional; degrade gracefully)
+- `op://Private/Supabase Travus/management_api_token` → `SUPABASE_ACCESS_TOKEN` (optional; degrade gracefully on management API)
+
+PRE-WORKFLOW: Resolve secrets + detect Supabase MCP (run BEFORE Step 1)
+
+First, detect whether Supabase MCP tools are available in this session.
+If `mcp__supabase__*` tools are listed, prefer them throughout the
+workflow (they avoid leaking the DB URL into shell history and use
+the MCP server's permissioning).
+
+Then resolve every secret you need via `op read`. If the first call fails,
+1Password may be locked — wait for the unlock prompt, then retry. If a
+required secret is still unavailable, write `BLOCKED: op read failed for
+<secret name> (1Password locked or item missing — verify path
+'op://Private/...')` to the report and exit.
+
+```bash
+# Fetch only what this agent needs:
+SUPABASE_PROJECT_REF=$(op read "op://Private/Supabase Travus/project_ref" 2>/dev/null) || true
+SUPABASE_ANON_KEY=$(op read "op://Private/Supabase Travus/anon_key" 2>/dev/null) || true
+SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
+SUPABASE_ACCESS_TOKEN=$(op read "op://Private/Supabase Travus/management_api_token" 2>/dev/null) || true
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export SUPABASE_PROJECT_REF SUPABASE_ANON_KEY SUPABASE_DB_URL \
+       SUPABASE_ACCESS_TOKEN AUDIT_SKILLS_PATH
+```
+
+If `SUPABASE_PROJECT_REF` or `SUPABASE_ANON_KEY` is unresolved, write `BLOCKED: op read failed for SUPABASE_PROJECT_REF or SUPABASE_ANON_KEY (1Password locked or item missing at op://Private/Supabase Travus/...)` to `./audit-reports/06-supabase-auth.md` and exit. `SUPABASE_DB_URL` and `SUPABASE_ACCESS_TOKEN` unresolved → mark dependent steps as "skipped: <reason>" and continue.
 
 1. **Pull `/auth/v1/settings` (provider + flags):**
+   No known Supabase MCP equivalent for `/auth/v1/settings` — keep curl using resolved `SUPABASE_PROJECT_REF` + `SUPABASE_ANON_KEY`.
    ```bash
    curl -fsS "https://${SUPABASE_PROJECT_REF}.supabase.co/auth/v1/settings" \
      -H "apikey: $SUPABASE_ANON_KEY" | tee /tmp/auth-settings.json | jq
@@ -149,7 +178,7 @@ REQUIRED INPUT
    ```bash
    curl -fsS "https://${SUPABASE_PROJECT_REF}.supabase.co/auth/v1/health" | tee /tmp/auth-health.json | jq
    ```
-   For self-hosted, also:
+   For self-hosted, also (if Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query; otherwise psql):
    ```bash
    if [ -n "$SUPABASE_DB_URL" ]; then
      psql "$SUPABASE_DB_URL" -At -c "select version from auth.schema_migrations order by version desc limit 1" \
@@ -180,6 +209,7 @@ REQUIRED INPUT
    Legacy format only → MEDIUM (schedule rotation). Legacy format committed in tracked files → CRITICAL.
 
 7. **MFA enforcement in RLS (`aal=aal2`):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    if [ -n "$SUPABASE_DB_URL" ]; then
      psql "$SUPABASE_DB_URL" -At --csv -c \
@@ -214,6 +244,7 @@ REQUIRED INPUT
     Self-hosted with auth `2.67.1–2.163.0` and unset → CRITICAL. Hosted Supabase: N/A.
 
 11. **Audit log retention sample:**
+    If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same queries. Otherwise:
     ```bash
     if [ -n "$SUPABASE_DB_URL" ]; then
       psql "$SUPABASE_DB_URL" -At --csv -c \
@@ -248,7 +279,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing env → BLOCKED + exit.
+- NEVER ask the user. Missing secret → BLOCKED + exit.
 - NEVER call mutating Auth endpoints (`/admin/users`, `/admin/generate_link`, `/token`).
 - NEVER destructive ops. NEVER push to git.
 - NEVER write outside ./audit-reports/, /tmp/.

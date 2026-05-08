@@ -4,7 +4,8 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh)
 - Reports directory: ./audit-reports/
-- Env: must be sourced from .audit-env in the parent shell
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
+- Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -115,9 +116,29 @@ REMEDIATION
 WORKFLOW (autonomous; numbered; execute in order)
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED INPUT
-- `$AUDIT_SKILLS_PATH`. If unset, write `BLOCKED: AUDIT_SKILLS_PATH not set` to `./audit-reports/07-supabase-edge-functions.md` and exit.
-- `supabase/functions/` directory. If missing, write `BLOCKED: supabase/functions/ not found` and exit.
+Required secrets (1Password)
+- This agent does NOT need DB or Supabase secrets. Only `AUDIT_SKILLS_PATH` is required to locate the shared Semgrep rule file.
+
+PRE-WORKFLOW: Resolve env + detect Supabase MCP (run BEFORE Step 1)
+
+First, detect whether Supabase MCP tools are available in this session.
+If `mcp__supabase__*` tools are listed, prefer them throughout the
+workflow (they avoid leaking the DB URL into shell history and use
+the MCP server's permissioning). For this agent, MCP is unlikely to be
+relevant (no DB access needed).
+
+This agent does NOT require any 1Password secrets — it performs static
+analysis only on local files. Resolve `AUDIT_SKILLS_PATH`:
+
+```bash
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export AUDIT_SKILLS_PATH
+```
+
+Note: the Semgrep rule file is shared at `$AUDIT_SKILLS_PATH/tools/semgrep-edge-functions.yml`.
+
+If `$AUDIT_SKILLS_PATH/tools/semgrep-edge-functions.yml` is missing, write `BLOCKED: AUDIT_SKILLS_PATH/tools/semgrep-edge-functions.yml not found (set AUDIT_SKILLS_PATH to the audit-skills repo)` to `./audit-reports/07-supabase-edge-functions.md` and exit.
+If `supabase/functions/` directory is missing, write `BLOCKED: supabase/functions/ not found` and exit.
 
 1. **Run the 13 custom Semgrep rules from the shared rule pack** (`$AUDIT_SKILLS_PATH/tools/semgrep-edge-functions.yml` is shared across audit runs — DO NOT duplicate the file locally):
    ```bash
@@ -225,7 +246,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing env → BLOCKED + exit.
+- NEVER ask the user. Missing env / required file → BLOCKED + exit.
 - NEVER deploy, invoke, or `supabase functions serve`. Static analysis only.
 - NEVER write or modify any file under `supabase/functions/`.
 - NEVER destructive ops. NEVER push to git.

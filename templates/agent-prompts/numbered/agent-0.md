@@ -5,11 +5,11 @@ CONTEXT
 - Working directory: `~/desktop/travus` (the user's Tauri app repo).
 - Audit-skills repo target: sibling at `../audit-skills`.
 - exec-agent wrapper target: `~/.local/bin/exec-agent`.
-- `.audit-env` target: `./.audit-env` in the working directory (mode 600).
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — there is NO `.audit-env` file and no `source` step. Downstream agents shell out to `op` directly. Your job is to verify `op` is installed and usable, list expected 1Password item paths, and detect available MCPs.
 
 HARD AUTONOMY RULES
 - NEVER ask the user. Make every command idempotent.
-- NEVER overwrite existing files with real content (esp. `.audit-env` if it already has non-CHANGEME values).
+- NEVER create `.audit-env` — secrets live in 1Password and are read at runtime by downstream agents.
 - NEVER push to git, NEVER modify code outside `~/.local/bin`, the working directory, and `~/.zshrc`.
 - NEVER print real secret values you find.
 - If the working directory is not `~/desktop/travus`, write `BLOCKED: not in ~/desktop/travus` to `./audit-reports/00-setup.md` and stop.
@@ -37,13 +37,13 @@ WORKFLOW (numbered, strictly idempotent)
    mkdir -p ./audit-reports
    ```
 
-4. **Harden `.gitignore`** (append-if-missing, both lines):
+4. **Harden `.gitignore`** (append-if-missing):
    ```bash
    touch .gitignore
    grep -qxF "audit-reports/" .gitignore || echo "audit-reports/" >> .gitignore
-   grep -qxF ".audit-env"     .gitignore || echo ".audit-env"     >> .gitignore
    grep -qxF "sbom/"          .gitignore || echo "sbom/"          >> .gitignore
    grep -qxF "threat-model.py" .gitignore || echo "threat-model.py" >> .gitignore
+   # NOTE: no .audit-env to ignore — secrets are in 1Password.
    ```
 
 5. **Install the `exec-agent` wrapper to `~/.local/bin`:**
@@ -64,50 +64,61 @@ WORKFLOW (numbered, strictly idempotent)
    export PATH="$HOME/.local/bin:$PATH"
    ```
 
-7. **Scaffold `.audit-env` only if missing** (do NOT overwrite real values):
+7. **Verify the 1Password CLI (`op`) is installed and check expected item paths.** Do NOT create `.audit-env`. Print the required items so the user can confirm they exist in their vault.
    ```bash
-   if [ ! -f .audit-env ]; then
-     cat > .audit-env <<'EOF'
-   # Audit environment — fill in CHANGEME values, keep file local + 600.
-   # This file is gitignored; never commit.
-
-   # Path to the audit-skills companion repo
-   export AUDIT_SKILLS_PATH="../audit-skills"
-
-   # Supabase — required for agents 5-9 (rls, auth, edge-functions, postgres, storage-realtime-network)
-   export SUPABASE_PROJECT_REF="CHANGEME"
-   export SUPABASE_ANON_KEY="sb_publishable_CHANGEME"
-   export SUPABASE_DB_URL="postgresql://readonly:CHANGEME@db.CHANGEME.supabase.co:5432/postgres?sslmode=verify-full"
-   export SUPABASE_ACCESS_TOKEN="CHANGEME"   # Management API PAT — only for network agent
-
-   # BOLA harness — required for agent 4 (sast-dast)
-   # Long-lived JWTs of two test users; create them in Supabase Auth and grab via /auth/v1/token
-   export USER_A_JWT="CHANGEME"
-   export USER_B_JWT="CHANGEME"
-
-   # Secret scanning — required for agent 2
-   export GITGUARDIAN_API_KEY="CHANGEME"
-
-   # Optional
-   export SEMGREP_APP_TOKEN=""
-   export MOBSF_API_KEY=""
-   EOF
-     echo "[setup] created .audit-env (placeholders — you must fill CHANGEME values)"
+   echo "=== 1Password CLI check ==="
+   if ! command -v op >/dev/null 2>&1; then
+     echo "[setup] op CLI MISSING — install from https://developer.1password.com/docs/cli/get-started/"
+     OP_STATUS="missing"
    else
-     echo "[setup] .audit-env already exists — leaving untouched"
+     echo "[setup] op CLI present: $(op --version 2>/dev/null)"
+     # Probe authentication with a non-sensitive call (item list, no value read)
+     if op vault list >/dev/null 2>&1; then
+       echo "[setup] op authenticated (vault list succeeded)"
+       OP_STATUS="ok"
+     else
+       echo "[setup] op installed but LOCKED or not signed in — user must unlock 1Password before running agents"
+       OP_STATUS="locked"
+     fi
    fi
-   chmod 600 .audit-env
+
+   cat <<'PATHS'
+   === Required 1Password item paths (downstream agents will `op read` these) ===
+     op://Private/Supabase Travus/db_url               → SUPABASE_DB_URL
+     op://Private/Supabase Travus/project_ref          → SUPABASE_PROJECT_REF
+     op://Private/Supabase Travus/anon_key             → SUPABASE_ANON_KEY (sb_publishable_*)
+     op://Private/Supabase Travus/service_role_key     → SUPABASE_SERVICE_ROLE_KEY (sb_secret_*)
+     op://Private/Supabase Travus/management_api_token → SUPABASE_ACCESS_TOKEN
+     op://Private/Test Users Travus/user_a_jwt         → USER_A_JWT
+     op://Private/Test Users Travus/user_b_jwt         → USER_B_JWT
+     op://Private/GitGuardian/api_key                  → GITGUARDIAN_API_KEY
+   PATHS
    ```
 
-8. **Verify the wrapper is callable** (without sourcing yet — it should respond to a missing-arg invocation by printing usage):
+8. **Verify the wrapper is callable** (it should respond to a missing-arg invocation by printing usage):
    ```bash
    ~/.local/bin/exec-agent 2>&1 | head -2 || true
    ```
 
-9. **Detect placeholder values still present in `.audit-env`** (without printing real values):
+9. **Detect available MCPs** (informational — Supabase, GitHub, Context7 may be wired up via Claude MCP). Best-effort, graceful failure:
    ```bash
-   PLACEHOLDERS=$(grep -E '"(CHANGEME|sb_publishable_CHANGEME)"' .audit-env | wc -l | tr -d ' ')
-   echo "[setup] placeholders remaining in .audit-env: $PLACEHOLDERS"
+   echo "=== MCP detection ==="
+   MCPS=""
+   if command -v claude >/dev/null 2>&1; then
+     MCP_LIST=$(claude mcp list 2>/dev/null || true)
+     if [ -n "$MCP_LIST" ]; then
+       echo "$MCP_LIST"
+       echo "$MCP_LIST" | grep -iq supabase  && MCPS="$MCPS supabase"
+       echo "$MCP_LIST" | grep -iq github    && MCPS="$MCPS github"
+       echo "$MCP_LIST" | grep -iq context7  && MCPS="$MCPS context7"
+     else
+       echo "[setup] could not detect MCPs (claude mcp list returned empty)"
+     fi
+   else
+     echo "[setup] could not detect MCPs (claude CLI not on PATH)"
+   fi
+   MCPS="${MCPS:- none-detected}"
+   echo "[setup] MCPs detected:$MCPS"
    ```
 
 10. **Detect Tauri / mobile / Supabase layout** in the cwd (informational — drives later agent skips):
@@ -130,26 +141,30 @@ OUTPUT
 Write a setup report to `./audit-reports/00-setup.md` with:
 
 - Date + working directory
-- Step-by-step status (✓ done | • already-present | ✗ failed) for each of the 9 numbered steps
+- Step-by-step status (✓ done | • already-present | ✗ failed) for each of the 10 numbered steps
 - Detected stack (from step 10)
-- `.audit-env` placeholder count
+- `op` CLI status (`ok` | `locked` | `missing`)
+- Detected MCPs (or `none-detected`)
+- Required 1Password item paths (verbatim list from step 7)
 - **Action items for the user:**
-  - "Edit `.audit-env` and replace each `CHANGEME` value" (if any remain)
+  - "Install 1Password CLI (`brew install 1password-cli`)" (if op_status == missing)
+  - "Unlock 1Password (run any `op` command — first call prompts to unlock)" (if op_status == locked)
+  - "Verify that each required 1Password item exists at the listed path" (always)
   - "Open a new terminal (or `source ~/.zshrc`) so the new PATH applies" (if PATH was modified)
-  - "Run `exec-agent agent-1.md` in your first terminal to start the audit"
+  - "Run `exec-agent agent-1.md` in your terminal to start the audit"
 
 Final stdout line:
 
 ```
-DONE | setup-agent | placeholders=N | path=<modified|already-present> | next: edit .audit-env then exec-agent agent-1.md
+DONE | setup-agent | op_status=<ok|locked|missing> | mcps=<list> | next: confirm 1Password items match expected paths, then run agent-1.md
 ```
 
 ═══════════════════════════════════════════════════════════════════
 QUALITY BAR
 ═══════════════════════════════════════════════════════════════════
 
-- Idempotent: a second run does NOT duplicate `.gitignore` entries, does NOT re-append PATH to `.zshrc`, does NOT overwrite `.audit-env`.
-- Print no secret values. The placeholder check counts CHANGEME occurrences without echoing line content.
+- Idempotent: a second run does NOT duplicate `.gitignore` entries, does NOT re-append PATH to `.zshrc`. No `.audit-env` is created or touched.
+- Print no secret values. The 1Password verification only probes auth state (`op vault list`); never call `op read` for real secrets in this setup step.
 - If `~/.zshrc` is a symlink to a managed dotfile (e.g. dotfiles repo), still append safely (file mutation, not file replacement).
 - If `git clone` fails (network, auth), document in the report and continue with the rest.
 - The wrapper script's `exec` bash builtin name is intentional inside its own file; on PATH it must be installed as `exec-agent` (handled in step 5).

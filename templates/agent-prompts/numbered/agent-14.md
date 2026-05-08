@@ -4,7 +4,7 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
 - Reports directory: ./audit-reports/
-- Env: sourced from .audit-env in parent shell
+- Secrets: NONE required (Frida + Burp + Objection all run locally against an instrumented device). NO `.audit-env` needed.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -226,6 +226,16 @@ WORKFLOW (autonomous; numbered)
 REQUIRED INPUT
 - An instrumented device. If `android/` and `ios/` are both absent AND no `*.apk`/`*.ipa` is found → write `BLOCKED: no mobile source (android/ and ios/ absent)` to `./audit-reports/14-mobile-dynamic.md` and exit.
 - If `frida-ps -U` returns no devices → write `BLOCKED: no instrumented device available` and exit.
+
+PRE-WORKFLOW: Resolve paths
+
+```bash
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export AUDIT_SKILLS_PATH
+```
+
+This agent requires a running rooted Android emulator OR jailbroken iOS
+device with Frida server. If `frida-ps -U` fails, BLOCKED: no instrumented device.
 
 1. **Verify environment:**
    ```bash

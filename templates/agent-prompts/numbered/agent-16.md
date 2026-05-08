@@ -5,7 +5,7 @@ CONTEXT
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
 - Reports directory: ./audit-reports/
 - Subagent reports already exist at: ./audit-reports/*.md (excluding 00-FINAL.md and 00-orchestrator.md)
-- Env: sourced from .audit-env in parent shell
+- Secrets: NONE required (this agent only reads existing report files in ./audit-reports/ and synthesises). NO `.audit-env` needed.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -183,6 +183,17 @@ Every finding in 00-FINAL.md MUST carry attribution in the form:
 ═══════════════════════════════════════════════════════════════════
 WORKFLOW (autonomous; numbered)
 ═══════════════════════════════════════════════════════════════════
+
+PRE-WORKFLOW: Resolve paths
+
+```bash
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export AUDIT_SKILLS_PATH
+```
+
+This agent requires that the other 15 agents have already produced reports
+in ./audit-reports/. If ./audit-reports/ is empty, BLOCKED: no upstream
+reports to synthesise — run agents 1-15 first.
 
 1. **List every file in `./audit-reports/`** (excluding `00-FINAL.md` and `00-orchestrator.md`).
    ```bash

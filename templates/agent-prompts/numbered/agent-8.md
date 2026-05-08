@@ -4,7 +4,8 @@ CONTEXT
 - Working directory: ~/desktop/travus
 - Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh)
 - Reports directory: ./audit-reports/
-- Env: must be sourced from .audit-env in the parent shell
+- Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
+- Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable.
 
 ═══════════════════════════════════════════════════════════════════
 SCOPE
@@ -143,10 +144,33 @@ REMEDIATION
 WORKFLOW (autonomous; numbered; execute in order)
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED INPUT
-- `$SUPABASE_DB_URL`. If unset, write `BLOCKED: SUPABASE_DB_URL not set` to `./audit-reports/08-supabase-postgres.md` and exit with the canonical DONE line showing 0 CRITICAL / 0 HIGH.
+Required secrets (1Password)
+- `op://Private/Supabase Travus/db_url` → `SUPABASE_DB_URL`
+
+PRE-WORKFLOW: Resolve secrets + detect Supabase MCP (run BEFORE Step 1)
+
+First, detect whether Supabase MCP tools are available in this session.
+If `mcp__supabase__*` tools are listed, prefer them throughout the
+workflow (they avoid leaking the DB URL into shell history and use
+the MCP server's permissioning).
+
+Then resolve every secret you need via `op read`. If the first call fails,
+1Password may be locked — wait for the unlock prompt, then retry. If a
+required secret is still unavailable, write `BLOCKED: op read failed for
+<secret name> (1Password locked or item missing — verify path
+'op://Private/...')` to the report and exit.
+
+```bash
+# Fetch only what this agent needs:
+SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+export SUPABASE_DB_URL AUDIT_SKILLS_PATH
+```
+
+If `SUPABASE_DB_URL` is unresolved, write `BLOCKED: op read failed for SUPABASE_DB_URL (1Password locked or item missing at op://Private/Supabase Travus/db_url)` to `./audit-reports/08-supabase-postgres.md` and exit with the canonical DONE line showing 0 CRITICAL / 0 HIGH.
 
 1. **Postgres version (CVE pivot):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same queries. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At \
      -c "select version()" > /tmp/pg-version.txt
@@ -161,6 +185,7 @@ REQUIRED INPUT
    For each, mark `<fixed>` or `<affected>` based on the running patch level.
 
 2. **Role inventory (BYPASSRLS audit):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select rolname, rolsuper, rolbypassrls, rolcanlogin, rolconnlimit
@@ -169,6 +194,7 @@ REQUIRED INPUT
    Flag any role that is NOT in {`postgres`, `service_role`, `supabase_admin`, `pgsodium_keymaker`, `pgsodium_keyholder`, `supabase_replication_admin`, `supabase_storage_admin`, `supabase_auth_admin`, `supabase_realtime_admin`} with `rolbypassrls=true` as **CRITICAL** (custom RLS-bypass role).
 
 3. **Role memberships (privesc paths):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select r.rolname as member, m.rolname as role_of, g.admin_option
@@ -180,6 +206,7 @@ REQUIRED INPUT
    Any role that inherits `service_role` or `postgres` and is reachable from `anon`/`authenticated` chain → **CRITICAL**.
 
 4. **Schema-level grants on `public`:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same queries. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select grantee, privilege_type, is_grantable
@@ -195,6 +222,7 @@ REQUIRED INPUT
    Any `INSERT/UPDATE/DELETE` granted to `anon` → **HIGH**. Any `GRANTED TO public` on application tables → **HIGH**.
 
 5. **SECURITY DEFINER functions + search_path pinning (Splinter 0011):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same query. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select n.nspname, p.proname, p.prosecdef,
@@ -208,6 +236,7 @@ REQUIRED INPUT
    For each row: if `proconfig` does NOT contain `search_path=` → **HIGH** (function-hijack via search_path).
 
 6. **Splinter rules 0011/0014/0022/0028/0029:**
+   If Supabase MCP is available, run `mcp__supabase__get_advisors` (type=`security`) for the canonical Splinter pass and filter to the rules below — this avoids the curl + psql roundtrip. Otherwise:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/supabase/splinter/main/splinter.sql -o /tmp/splinter.sql
    psql "$SUPABASE_DB_URL" -f /tmp/splinter.sql > /dev/null 2>&1
@@ -224,6 +253,7 @@ REQUIRED INPUT
    Each 0028/0029 hit = **CRITICAL** privesc. Each 0011 hit = **HIGH**. 0014/0022 = **MEDIUM**.
 
 7. **Extensions inventory:**
+   If Supabase MCP is available, run `mcp__supabase__list_extensions` (or `mcp__supabase__execute_sql` with the same query). Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select e.extname, e.extversion, n.nspname as schema, x.default_version, x.installed_version
@@ -235,6 +265,7 @@ REQUIRED INPUT
    Flag: extension in `public` schema (smell), `installed_version != default_version` (outdated), presence of `pgsodium`/`supabase_vault` (Vault wiring), `pg_cron` (audit cron jobs separately), `wrappers` (FDW present → step 9).
 
 8. **pgaudit + supa_audit config:**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same SHOW / SELECT queries. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At \
      -c "show pgaudit.log" 2>&1 | tee /tmp/pgaudit-log.txt
@@ -248,6 +279,7 @@ REQUIRED INPUT
    `pgaudit.log_parameter = on` → **CRITICAL** on Supabase (would log pgsodium plaintexts to logs). `pgaudit.log = ''` (empty) on a production project → **HIGH** (no audit trail).
 
 9. **FDW review (SupaPwn 2025 vector):**
+   If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same queries. Otherwise:
    ```bash
    psql "$SUPABASE_DB_URL" -At --csv \
      -c "select srvname, srvtype, srvowner::regrole,
@@ -268,6 +300,7 @@ REQUIRED INPUT
    Grep `srvoptions`/`umoptions` for `password=`, `key=`, `secret=`, `token=` → **CRITICAL** plaintext credentials in catalog (must move to Vault). Any USAGE on a foreign server granted to a role other than `service_role`/`postgres` → **HIGH**.
 
 10. **Vault verification:**
+    If Supabase MCP is available, run `mcp__supabase__execute_sql` with the same queries. Otherwise:
     ```bash
     psql "$SUPABASE_DB_URL" -At \
       -c "select count(*) from vault.secrets" 2>/dev/null > /tmp/vault-count.txt || echo "0" > /tmp/vault-count.txt
@@ -288,7 +321,7 @@ OUTPUT
 ═══════════════════════════════════════════════════════════════════
 HARD AUTONOMY RULES
 ═══════════════════════════════════════════════════════════════════
-- NEVER ask the user. Missing env → BLOCKED + exit.
+- NEVER ask the user. Missing secret → BLOCKED + exit.
 - NEVER destructive ops. NEVER `alter system`, `create`, `drop`, `grant`, `revoke`. NEVER push to git.
 - NEVER write outside ./audit-reports/, /tmp/.
 - NEVER print secret values — redact (sb_secret_***...REDACTED).
