@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# exec — launch a numbered audit agent in this terminal.
+#
+# Usage:
+#   exec agent-1.md          # runs Phase 1 (threat-modeler)
+#   exec agent-2.md          # runs Phase 2 / agent 2 (secrets-scanner)
+#   ...
+#   exec agent-16.md         # runs Phase 3 (orchestrator synthesis)
+#
+# The script invokes Claude Code in non-interactive mode with the file's
+# contents as the prompt. The agent runs autonomously, writes its report
+# to ./audit-reports/, and prints a one-line summary to stdout when done.
+#
+# Pre-flight: cd ~/desktop/travus && source .audit-env
+
+set -euo pipefail
+
+if [ $# -ne 1 ]; then
+  echo "usage: exec <agent-N.md>" >&2
+  exit 1
+fi
+
+PROMPT_FILE="$1"
+
+# Resolve relative path: try ./ first, then numbered/ in audit-skills.
+if [ -f "$PROMPT_FILE" ]; then
+  RESOLVED="$PROMPT_FILE"
+elif [ -f "${AUDIT_SKILLS_PATH:-../audit-skills}/templates/agent-prompts/numbered/$PROMPT_FILE" ]; then
+  RESOLVED="${AUDIT_SKILLS_PATH:-../audit-skills}/templates/agent-prompts/numbered/$PROMPT_FILE"
+else
+  echo "exec: cannot find $PROMPT_FILE (looked in . and \$AUDIT_SKILLS_PATH/templates/agent-prompts/numbered/)" >&2
+  exit 2
+fi
+
+# Verify Claude Code is available.
+if ! command -v claude >/dev/null 2>&1; then
+  echo "exec: 'claude' CLI not on PATH. Install Claude Code first." >&2
+  exit 3
+fi
+
+# Verify reports directory exists.
+mkdir -p ./audit-reports
+
+# Run.
+echo "[exec] launching $RESOLVED ..." >&2
+exec claude --dangerously-skip-permissions -p "$(cat "$RESOLVED")"
