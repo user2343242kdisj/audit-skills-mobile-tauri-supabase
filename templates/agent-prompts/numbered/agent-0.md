@@ -3,7 +3,7 @@ You are the **setup-agent** for the pre-launch security audit toolchain. Your jo
 
 CONTEXT
 - Working directory: `~/desktop/travus` (the user's Tauri app repo).
-- Audit-skills repo target: sibling at `../audit-skills`.
+- Audit-skills repo target: subfolder at `./audit`.
 - exec-agent wrapper target: `~/.local/bin/exec-agent`.
 - Secrets: resolved at runtime via 1Password CLI (`op read`) — there is NO `.audit-env` file and no `source` step. Downstream agents shell out to `op` directly. Your job is to verify `op` is installed and usable, list expected 1Password item paths, and detect available MCPs.
 
@@ -23,12 +23,12 @@ WORKFLOW (numbered, strictly idempotent)
    pwd | grep -q "/desktop/travus$" || { echo "BLOCKED: cwd is $(pwd), expected ~/desktop/travus" >&2; exit 1; }
    ```
 
-2. **Clone audit-skills if missing** (sibling directory):
+2. **Clone audit-skills if missing** (subfolder):
    ```bash
-   if [ ! -d ../audit-skills ]; then
-     git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ../audit-skills
+   if [ ! -d ./audit ]; then
+     git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ./audit
    else
-     ( cd ../audit-skills && git pull --ff-only origin main 2>&1 | tail -3 )
+     ( cd ./audit && git pull --ff-only origin main 2>&1 | tail -3 )
    fi
    ```
 
@@ -43,13 +43,14 @@ WORKFLOW (numbered, strictly idempotent)
    grep -qxF "audit-reports/" .gitignore || echo "audit-reports/" >> .gitignore
    grep -qxF "sbom/"          .gitignore || echo "sbom/"          >> .gitignore
    grep -qxF "threat-model.py" .gitignore || echo "threat-model.py" >> .gitignore
+   grep -qxF "audit/" .gitignore || echo "audit/" >> .gitignore
    # NOTE: no .audit-env to ignore — secrets are in 1Password.
    ```
 
 5. **Install the `exec-agent` wrapper to `~/.local/bin`:**
    ```bash
    mkdir -p ~/.local/bin
-   cp -f ../audit-skills/templates/agent-prompts/numbered/exec ~/.local/bin/exec-agent
+   cp -f ./audit/templates/agent-prompts/numbered/exec ~/.local/bin/exec-agent
    chmod +x ~/.local/bin/exec-agent
    ```
 

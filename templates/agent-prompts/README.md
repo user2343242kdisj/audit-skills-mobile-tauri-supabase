@@ -29,44 +29,44 @@ Self-contained prompts to paste into individual Claude Code terminals so each su
 
 ## One-time setup (in YOUR APP REPO at `~/desktop/travus`)
 
-The audit runs from `~/desktop/travus` (your Tauri app repo). Every prompt assumes the working directory contains:
+The audit runs from `~/desktop/travus` (your Tauri app repo). `audit-skills` is installed **inside the repo** as `./audit/` (gitignored). Reports go to `./audit-reports/` (also gitignored). Every prompt assumes the working directory contains:
 - `src-tauri/` — Tauri Rust core + capabilities + tauri.conf.json
 - `supabase/` (or accessible via `SUPABASE_DB_URL`) — Edge Functions + migrations + tests
 - `android/` and/or `ios/` if mobile is built in this repo (otherwise mobile agents skip)
 - `package.json` — root npm dependencies
+- `audit/` — cloned audit-skills (gitignored)
 - `audit-reports/` — created on first run, gitignored
+
+### Zero-touch (recommended)
+
+```bash
+cd ~/desktop/travus
+curl -fsSL https://raw.githubusercontent.com/user2343242kdisj/audit-skills-mobile-tauri-supabase/main/install.sh | bash
+```
+
+`install.sh` clones the repo into `./audit/`, installs the `exec-agent` wrapper, creates `./audit-reports/`, and adds both `audit/` and `audit-reports/` to `.gitignore`. Secrets live in 1Password and are resolved at runtime via `op read` — no `.audit-env` file is created.
+
+### Manual
 
 ```bash
 cd ~/desktop/travus
 
-# 1. Audit reports directory (gitignored)
+# 1. Clone audit-skills INSIDE your app repo as ./audit/
+[ -d ./audit ] || git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ./audit
+
+# 2. Audit reports directory + gitignore both audit/ and audit-reports/
 mkdir -p audit-reports
-echo "audit-reports/" >> .gitignore
+grep -qxF "audit-reports/" .gitignore 2>/dev/null || echo "audit-reports/" >> .gitignore
+grep -qxF "audit/"         .gitignore 2>/dev/null || echo "audit/"         >> .gitignore
 
-# 2. Clone audit-skills somewhere
-git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ../audit-skills
+# 3. Verify 1Password CLI is authenticated (agents resolve secrets via `op read`)
+op vault list >/dev/null
+```
 
-# 3. Create a shared env file (NEVER commit)
-cat > .audit-env <<'EOF'
-# Required for Supabase agents
-export SUPABASE_DB_URL="postgresql://readonly_user:PASSWORD@db.<projectref>.supabase.co:5432/postgres?sslmode=verify-full"
-export SUPABASE_PROJECT_REF="<projectref>"
-export SUPABASE_ANON_KEY="sb_publishable_..."
-export SUPABASE_ACCESS_TOKEN="<management-api-pat>"   # only for network-auditor
+The shared path is `./audit/templates/agent-prompts/...`. If you prefer an env var for scripts:
 
-# Required for BOLA harness (sast-dast-coordinator)
-export USER_A_JWT="<long-lived JWT for test user A>"
-export USER_B_JWT="<long-lived JWT for test user B>"
-
-# Required for secrets-scanner-coordinator
-export GITGUARDIAN_API_KEY="<from dashboard.gitguardian.com>"
-
-# Path to audit-skills repo
-export AUDIT_SKILLS_PATH="../audit-skills"
-EOF
-
-echo ".audit-env" >> .gitignore
-chmod 600 .audit-env
+```bash
+export AUDIT_SKILLS_PATH="./audit"
 ```
 
 ## Run pattern
@@ -76,9 +76,8 @@ chmod 600 .audit-env
 ```bash
 # Terminal 1
 cd ~/desktop/travus
-source .audit-env
 claude --dangerously-skip-permissions  # auto-approve tool calls
-# Then paste the contents of templates/agent-prompts/01-threat-modeler.md
+# Then paste the contents of ./audit/templates/agent-prompts/01-threat-modeler.md
 ```
 
 Wait for `DONE | threat-modeler | …` line. Output: `audit-reports/01-threat-model.md`.
@@ -89,9 +88,8 @@ Open 14 separate terminals (or use `tmux`/`zellij` for split-pane). In each:
 
 ```bash
 cd ~/desktop/travus
-source .audit-env
 claude --dangerously-skip-permissions
-# Then paste the contents of templates/agent-prompts/<NN>-<name>.md
+# Then paste the contents of ./audit/templates/agent-prompts/<NN>-<name>.md
 ```
 
 Each writes its report to `audit-reports/<NN>-<name>.md`.
@@ -101,9 +99,9 @@ You can also batch them with `claude -p` (non-interactive):
 ```bash
 # In a launch script, looping over Phase 2 prompts (skip 00 and 01):
 cd ~/desktop/travus
-source .audit-env
-for prompt in $AUDIT_SKILLS_PATH/templates/agent-prompts/0[2-9]-*.md \
-              $AUDIT_SKILLS_PATH/templates/agent-prompts/1[0-5]-*.md; do
+op vault list >/dev/null   # unlock 1Password once
+for prompt in ./audit/templates/agent-prompts/0[2-9]-*.md \
+              ./audit/templates/agent-prompts/1[0-5]-*.md; do
   name=$(basename "$prompt" .md)
   log="audit-reports/$name.log"
   (claude --dangerously-skip-permissions -p "$(cat "$prompt")" > "$log" 2>&1) &
@@ -116,9 +114,8 @@ echo "All 14 Phase 2 agents complete."
 
 ```bash
 cd ~/desktop/travus
-source .audit-env
 claude --dangerously-skip-permissions
-# Then paste the contents of templates/agent-prompts/00-orchestrator.md
+# Then paste the contents of ./audit/templates/agent-prompts/00-orchestrator.md
 ```
 
 Output: `audit-reports/00-FINAL.md`.
@@ -130,7 +127,7 @@ Every prompt embeds the same autonomy rules:
 1. **No questions to user mid-flight.** Missing input → write `BLOCKED: <reason>` and exit cleanly.
 2. **No destructive operations.** Audit only. No DROP, DELETE, force push, `rm -rf` outside `/tmp`.
 3. **Writes restricted to `./audit-reports/`.** Never modifies app code.
-4. **Reads from approved paths only:** the app repo, `$AUDIT_SKILLS_PATH/`, `/tmp/`.
+4. **Reads from approved paths only:** the app repo (including `./audit/`), `/tmp/`.
 5. **Never pushes to git** — the user reviews the report directory and acts on it.
 6. **Final stdout line is parse-friendly:** `DONE | <agent-name> | <CRITICAL> CRITICAL | <HIGH> HIGH | <report-path>`.
 
@@ -164,10 +161,11 @@ If your stack doesn't have a layer (e.g. no mobile app, just Tauri + Supabase), 
 After remediation, re-run only the affected agents:
 
 ```bash
+cd ~/desktop/travus
 # Example: re-run after fixing CVE-2026-31813
-claude --dangerously-skip-permissions -p "$(cat $AUDIT_SKILLS_PATH/templates/agent-prompts/06-supabase-auth.md)"
+claude --dangerously-skip-permissions -p "$(cat ./audit/templates/agent-prompts/06-supabase-auth.md)"
 # Then re-run orchestrator to refresh the synthesis
-claude --dangerously-skip-permissions -p "$(cat $AUDIT_SKILLS_PATH/templates/agent-prompts/00-orchestrator.md)"
+claude --dangerously-skip-permissions -p "$(cat ./audit/templates/agent-prompts/00-orchestrator.md)"
 ```
 
 ## CI integration

@@ -2,7 +2,7 @@ You are operating as the **threat-modeler** for the pre-launch security audit of
 
 CONTEXT
 - Working directory: ~/desktop/travus (the app repo).
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
 - Reports directory: ./audit-reports/
 - Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt; wait for it then continue.
 
@@ -179,7 +179,7 @@ Resolve every secret you need by shelling out to `op`. If the first call fails, 
 ```bash
 # threat-modeler uses none of the secrets directly, but resolves AUDIT_SKILLS_PATH
 # (Optional Supabase context only if you want to introspect schema via MCP)
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 

@@ -2,7 +2,7 @@ You are operating as the **mobile-platform-auditor** (merged: deeplinks + storag
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts only
 - Reports directory: ./audit-reports/
 - Secrets: NONE required (operates on local source + extracted bundles). NO `.audit-env` needed.
 
@@ -391,7 +391,7 @@ REQUIRED INPUT
 PRE-WORKFLOW: Resolve paths
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 

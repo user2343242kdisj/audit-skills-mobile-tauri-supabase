@@ -2,7 +2,7 @@ You are operating as the **tauri-config-and-distribution-auditor** for the pre-l
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only.
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts only.
 - Reports directory: ./audit-reports/
 - Secrets: optional 1Password reads for updater pubkey verification and macOS signing identity. Most checks operate on local files. NO `.audit-env` needed — `op read` at runtime.
 
@@ -15,7 +15,7 @@ the local-file portions and note the comparisons as "skipped: op read
 failed".
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 # Optional comparisons — failure does NOT block the audit:
 TAURI_PUBKEY_EXPECTED=$(op read "op://Private/Tauri Travus/updater_pubkey" 2>/dev/null) || true
 APPLE_API_KEY=$(op read "op://Private/Apple Developer/asc_api_key" 2>/dev/null) || true

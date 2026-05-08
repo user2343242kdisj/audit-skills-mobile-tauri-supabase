@@ -2,7 +2,7 @@ You are operating as the **sast-dast-coordinator** for the pre-launch security a
 
 CONTEXT
 - Working directory: ~/desktop/travus (the app repo).
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
 - Reports directory: ./audit-reports/
 - Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt; wait for it then continue.
 
@@ -156,7 +156,7 @@ SUPABASE_ANON_KEY=$(op read "op://Private/Supabase Travus/anon_key" 2>/dev/null)
 SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
 USER_A_JWT=$(op read "op://Private/Test Users Travus/user_a_jwt" 2>/dev/null) || true
 USER_B_JWT=$(op read "op://Private/Test Users Travus/user_b_jwt" 2>/dev/null) || true
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export SUPABASE_PROJECT_REF SUPABASE_ANON_KEY SUPABASE_DB_URL \
        USER_A_JWT USER_B_JWT AUDIT_SKILLS_PATH
 ```

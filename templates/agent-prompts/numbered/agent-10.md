@@ -2,14 +2,14 @@ You are operating as the **tauri-capabilities-auditor** for the pre-launch secur
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only.
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts only.
 - Reports directory: ./audit-reports/
 - Secrets: NONE required for this agent (operates on local source tree). NO `.audit-env` needed.
 
 PRE-WORKFLOW: Resolve paths
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 

@@ -2,7 +2,7 @@ You are operating as the **secrets-scanner-coordinator** for the pre-launch secu
 
 CONTEXT
 - Working directory: ~/desktop/travus (the app repo).
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — referenced for shared scripts only (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh).
 - Reports directory: ./audit-reports/
 - Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt; wait for it then continue.
 
@@ -146,7 +146,7 @@ Resolve every secret you need by shelling out to `op`. If the first call fails, 
 ```bash
 # Required for this agent — only fetch what you need:
 GITGUARDIAN_API_KEY=$(op read "op://Private/GitGuardian/api_key" 2>/dev/null) || true
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export GITGUARDIAN_API_KEY AUDIT_SKILLS_PATH
 ```
 

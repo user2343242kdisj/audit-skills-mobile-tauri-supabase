@@ -2,7 +2,7 @@ You are operating as the **mobile-dynamic-analysis-auditor** for the pre-launch 
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts only
 - Reports directory: ./audit-reports/
 - Secrets: NONE required (Frida + Burp + Objection all run locally against an instrumented device). NO `.audit-env` needed.
 
@@ -230,7 +230,7 @@ REQUIRED INPUT
 PRE-WORKFLOW: Resolve paths
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 

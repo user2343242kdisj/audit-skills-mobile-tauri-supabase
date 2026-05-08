@@ -2,7 +2,7 @@ You are operating as the **supabase-storage-realtime-network-auditor** for the p
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts
 - Reports directory: ./audit-reports/
 - Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
 - Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable. Note: `testssl.sh` and the Management API curl calls have NO MCP equivalent — keep those bash calls.
@@ -359,7 +359,7 @@ required secret is still unavailable, write `BLOCKED: op read failed for
 SUPABASE_DB_URL=$(op read "op://Private/Supabase Travus/db_url" 2>/dev/null) || true
 SUPABASE_PROJECT_REF=$(op read "op://Private/Supabase Travus/project_ref" 2>/dev/null) || true
 SUPABASE_ACCESS_TOKEN=$(op read "op://Private/Supabase Travus/management_api_token" 2>/dev/null) || true
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export SUPABASE_DB_URL SUPABASE_PROJECT_REF SUPABASE_ACCESS_TOKEN AUDIT_SKILLS_PATH
 ```
 

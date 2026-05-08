@@ -2,7 +2,7 @@ You are operating as the **mobile-static-analysis-auditor** for the pre-launch s
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts only
 - Reports directory: ./audit-reports/
 - Secrets: optional MOBSF_API_KEY via 1Password if running MobSF Docker locally. Most checks read APK/IPA bundles directly. NO `.audit-env` needed.
 
@@ -166,7 +166,7 @@ REQUIRED INPUT
 PRE-WORKFLOW: Resolve paths + (optionally) MobSF key
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 MOBSF_API_KEY=$(op read "op://Private/MobSF/api_key" 2>/dev/null) || true
 export AUDIT_SKILLS_PATH MOBSF_API_KEY
 ```

@@ -151,7 +151,7 @@ Production-ready scripts and templates that close gaps no public tool covers as 
 | [`templates/security-workflow.yml`](templates/security-workflow.yml) | Drop-in `.github/workflows/security.yml` orchestrating 9 layers: ggshield, Squawk, Splinter, supabase test db, pgrls, Supashield, Schemathesis, BOLA harness, Semgrep, MobSF, cargo-audit, cargo-deny, testssl, SBOM, Grype. |
 | [`templates/threat-model-pytm.py`](templates/threat-model-pytm.py) | pytm starter for a mobile + Tauri + Supabase architecture; auto-runs STRIDE + lists 16 custom audit-derived threats. |
 | [`templates/claude-agents/`](templates/claude-agents/) | **21-subagent hierarchy** for Claude Code (`.claude/agents/`): 1 orchestrator + 20 narrow domain experts (7 Supabase + 5 Tauri + 4 Mobile + 4 cross-cutting). Drop into any repo. See [`templates/claude-agents/README.md`](templates/claude-agents/README.md). |
-| [`templates/agent-prompts/`](templates/agent-prompts/) | **16 self-contained terminal prompts** for max-parallelism audits. Paste each into its own Claude Code terminal (`--dangerously-skip-permissions` for autonomous mode). Each runs independently and writes to `./audit-reports/<NN>-<name>.md`; the orchestrator (00) synthesises them into `00-FINAL.md`. See [`templates/agent-prompts/README.md`](templates/agent-prompts/README.md). |
+| [`templates/agent-prompts/`](templates/agent-prompts/) | **16 self-contained terminal prompts** for max-parallelism audits. Install into your app repo with one command (`curl … install.sh \| bash`), which clones this repo as `./audit/` (gitignored) and installs the `exec-agent` wrapper. Then run `exec-agent ./audit/templates/agent-prompts/numbered/agent-N.md` per terminal — each writes to `./audit-reports/<NN>-<name>.md`; the orchestrator (16) synthesises them into `00-FINAL.md`. Secrets resolved at runtime via `op read` (1Password) — no `.audit-env`. See [`templates/agent-prompts/README.md`](templates/agent-prompts/README.md). |
 
 ## Deep-dive audit references in this repo
 
@@ -163,10 +163,21 @@ Production-ready scripts and templates that close gaps no public tool covers as 
 
 ## How to use this with Claude Code
 
-```bash
-# Clone into your project root (or alongside it)
-git clone https://github.com/<your>/audit-skills-mobile-tauri-supabase.git
+For the **automated agent-prompts audit workflow**, install into your app repo with the one-shot script:
 
+```bash
+cd ~/your-app-repo                  # e.g. ~/desktop/travus
+curl -fsSL https://raw.githubusercontent.com/user2343242kdisj/audit-skills-mobile-tauri-supabase/main/install.sh | bash
+# Clones this repo into ./audit/ (gitignored), installs exec-agent on PATH,
+# creates ./audit-reports/, and gitignores both audit/ and audit-reports/.
+```
+
+Then run any of the 16 numbered agents per terminal. See [`templates/agent-prompts/numbered/README.md`](templates/agent-prompts/numbered/README.md).
+
+For **ad-hoc skill use** (loading individual `SKILL.md` files into Claude Code/Cursor), you can also just clone anywhere and point your agent at the directory:
+
+```bash
+git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git
 # Inside Claude Code, point it at this directory and ask:
 #   "Run the threat-modeling skill on the architecture in /docs/architecture.md"
 #   "Use the BOLA-testing skill against the endpoints in postman.json"

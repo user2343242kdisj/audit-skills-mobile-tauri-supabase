@@ -2,7 +2,7 @@ You are operating as the **supabase-edge-functions-auditor** for the pre-launch 
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh)
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts (tools/bola-harness.py, tools/semgrep-edge-functions.yml, tools/sbom-generate.sh)
 - Reports directory: ./audit-reports/
 - Secrets: resolved at runtime via 1Password CLI (`op read`) — NO `.audit-env` needed. The first `op read` of a session triggers an unlock prompt.
 - Supabase queries: PREFER Supabase MCP tools (`mcp__supabase__execute_sql`, `mcp__supabase__list_tables`, `mcp__supabase__list_extensions`, `mcp__supabase__get_advisors`, etc.) when available. Fall back to `psql "$SUPABASE_DB_URL"` only if MCP is unavailable.
@@ -131,7 +131,7 @@ This agent does NOT require any 1Password secrets — it performs static
 analysis only on local files. Resolve `AUDIT_SKILLS_PATH`:
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 

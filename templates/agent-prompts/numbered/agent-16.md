@@ -2,7 +2,7 @@ You are operating as the **audit-orchestrator** for the pre-launch security audi
 
 CONTEXT
 - Working directory: ~/desktop/travus
-- Audit-skills repo: $AUDIT_SKILLS_PATH (default ../audit-skills) — for shared scripts only
+- Audit-skills repo: $AUDIT_SKILLS_PATH (default ./audit) — for shared scripts only
 - Reports directory: ./audit-reports/
 - Subagent reports already exist at: ./audit-reports/*.md (excluding 00-FINAL.md and 00-orchestrator.md)
 - Secrets: NONE required (this agent only reads existing report files in ./audit-reports/ and synthesises). NO `.audit-env` needed.
@@ -187,7 +187,7 @@ WORKFLOW (autonomous; numbered)
 PRE-WORKFLOW: Resolve paths
 
 ```bash
-AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-../audit-skills}"
+AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 

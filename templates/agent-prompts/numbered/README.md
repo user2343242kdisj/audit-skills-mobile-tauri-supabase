@@ -6,34 +6,57 @@ Numbered, paste-direct prompts. Each terminal runs one command:
 exec agent-N.md
 ```
 
+## Layout
+
+`audit-skills` is installed **inside your Tauri app repo** as `./audit/` (gitignored). Reports are written to `./audit-reports/` (also gitignored). Both live next to your existing `src-tauri/`, `supabase/`, etc.
+
+```
+~/desktop/travus/                    ← your Tauri app repo
+├── src-tauri/
+├── supabase/
+├── android/, ios/
+├── audit-reports/                   ← gitignored, agents write here
+├── audit/                           ← cloned audit-skills (also gitignored)
+│   ├── templates/agent-prompts/numbered/{agent-0.md … agent-16.md, exec}
+│   ├── tools/
+│   └── docs/
+└── .gitignore                       ← contains audit-reports/ + audit/
+```
+
 ## Zero-touch setup (recommended)
 
 ```bash
 cd ~/desktop/travus
-git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ../audit-skills 2>/dev/null
+curl -fsSL https://raw.githubusercontent.com/user2343242kdisj/audit-skills-mobile-tauri-supabase/main/install.sh | bash
 claude --dangerously-skip-permissions
 # Paste the contents of:
-#   ../audit-skills/templates/agent-prompts/numbered/agent-0.md
+#   ./audit/templates/agent-prompts/numbered/agent-0.md
 ```
 
-`agent-0` (the **setup-agent**) does everything below for you: installs the wrapper, hardens `.gitignore`, verifies `op` CLI authentication, lists expected 1Password item paths, detects your stack, writes a setup report. **No `.audit-env` is created** — secrets live in 1Password and are resolved at runtime via `op read`.
+`install.sh` clones the repo into `./audit/`, installs the `exec-agent` wrapper on your PATH, creates `./audit-reports/`, and adds both `audit/` and `audit-reports/` to `.gitignore`.
+
+`agent-0` (the **setup-agent**) then verifies `op` CLI authentication, lists expected 1Password item paths, detects your stack, and writes a setup report. **No `.audit-env` is created** — secrets live in 1Password and are resolved at runtime via `op read`.
 
 ## Manual setup (if you prefer)
 
 ```bash
-# 1. Make the exec script available on your PATH (pick one):
-sudo cp ../audit-skills/templates/agent-prompts/numbered/exec /usr/local/bin/exec-agent
+cd ~/desktop/travus
+
+# 1. Clone audit-skills INSIDE your app repo as ./audit/
+[ -d ./audit ] || git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ./audit
+
+# 2. Make the exec script available on your PATH (pick one):
+sudo cp ./audit/templates/agent-prompts/numbered/exec /usr/local/bin/exec-agent
 # OR per-user:
-mkdir -p ~/.local/bin && cp ../audit-skills/templates/agent-prompts/numbered/exec ~/.local/bin/exec-agent
+mkdir -p ~/.local/bin && cp ./audit/templates/agent-prompts/numbered/exec ~/.local/bin/exec-agent
 export PATH="$HOME/.local/bin:$PATH"   # add to ~/.zshrc
 
-# 2. Clone audit-skills + create reports dir (one time)
-cd ~/desktop/travus
-[ -d ../audit-skills ] || git clone https://github.com/user2343242kdisj/audit-skills-mobile-tauri-supabase.git ../audit-skills
+# 3. Create reports dir + gitignore both audit/ and audit-reports/
 mkdir -p audit-reports
 grep -qxF "audit-reports/" .gitignore 2>/dev/null || echo "audit-reports/" >> .gitignore
+grep -qxF "audit/"         .gitignore 2>/dev/null || echo "audit/"         >> .gitignore
 
-# 3. Verify 1Password CLI is authenticated (op session unlocks on first read each Claude session)
+# 4. Verify 1Password CLI is authenticated (op session unlocks on first read each Claude session)
 op vault list 2>&1 | head -5
 ```
 
@@ -63,15 +86,15 @@ Open 16 terminals (or `tmux` panes). In each:
 
 ```bash
 cd ~/desktop/travus
-exec-agent agent-1.md          # terminal 1 → threat model
+exec-agent ./audit/templates/agent-prompts/numbered/agent-1.md   # terminal 1 → threat model
 ```
 
 ```bash
 cd ~/desktop/travus
-exec-agent agent-2.md          # terminal 2 → secrets scan
+exec-agent ./audit/templates/agent-prompts/numbered/agent-2.md   # terminal 2 → secrets scan
 ```
 
-… and so on for `agent-3.md` through `agent-16.md`.
+… and so on for `agent-3.md` through `agent-16.md`. (If `exec-agent` resolves bare names against `./audit/templates/agent-prompts/numbered/`, you can use the short form `exec-agent agent-1.md`.)
 
 ## Agent → topic map
 
@@ -98,9 +121,9 @@ exec-agent agent-2.md          # terminal 2 → secrets scan
 ## Recommended order
 
 ```
-Terminal 1:  exec-agent agent-1.md          # ← wait for DONE before launching 2-15
-Terminals 2-15:  exec-agent agent-N.md      # ← all in parallel; wait for all 14 DONE
-Terminal 16: exec-agent agent-16.md         # ← synthesis; produces audit-reports/00-FINAL.md
+Terminal 1:      exec-agent ./audit/templates/agent-prompts/numbered/agent-1.md    # ← wait for DONE before launching 2-15
+Terminals 2-15:  exec-agent ./audit/templates/agent-prompts/numbered/agent-N.md    # ← all in parallel; wait for all 14 DONE
+Terminal 16:     exec-agent ./audit/templates/agent-prompts/numbered/agent-16.md   # ← synthesis; produces audit-reports/00-FINAL.md
 ```
 
 ## Batch launch for Phase 2 (alternative to opening 14 terminals)
@@ -109,13 +132,14 @@ Terminal 16: exec-agent agent-16.md         # ← synthesis; produces audit-repo
 cd ~/desktop/travus
 # Trigger 1Password unlock once (any op read in foreground first)
 op vault list >/dev/null
+PROMPTS=./audit/templates/agent-prompts/numbered
 for n in 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   log="audit-reports/agent-$n.log"
-  ( exec-agent "agent-$n.md" > "$log" 2>&1 ) &
+  ( exec-agent "$PROMPTS/agent-$n.md" > "$log" 2>&1 ) &
 done
 wait
 echo "Phase 2 complete. Logs in audit-reports/agent-*.log"
-exec-agent agent-16.md
+exec-agent "$PROMPTS/agent-16.md"
 ```
 
 ## Each agent's autonomy guarantees
@@ -129,15 +153,18 @@ exec-agent agent-16.md
 ## Re-running after a fix
 
 ```bash
-exec-agent agent-6.md       # e.g. re-audit auth after CVE-2026-31813 fix
-exec-agent agent-16.md      # refresh the synthesis
+cd ~/desktop/travus
+PROMPTS=./audit/templates/agent-prompts/numbered
+exec-agent "$PROMPTS/agent-6.md"     # e.g. re-audit auth after CVE-2026-31813 fix
+exec-agent "$PROMPTS/agent-16.md"    # refresh the synthesis
 ```
 
 ## Source files
 
-The numbered files are mechanically generated from the topic-named originals in `../raw/`. To regenerate:
+The numbered files are mechanically generated from the topic-named originals in `./audit/templates/agent-prompts/raw/`. To regenerate (run from inside the `audit/` clone):
 
 ```bash
+cd ~/desktop/travus/audit
 declare -a MAP=(
   "1:01-threat-modeler" "2:02-secrets-scanner" "3:03-sbom-vuln" "4:04-sast-dast"
   "5:05-supabase-rls" "6:06-supabase-auth" "7:07-supabase-edge-functions"
