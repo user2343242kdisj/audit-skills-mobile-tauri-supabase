@@ -46,7 +46,7 @@ CONTEXT
 
 ARCHITECTURE
 - **Phase 1 (sequential, you run inline):** threat-modeler → `audit-reports/01-threat-model.md`.
-- **Phase 2 (14 parallel subagents, dispatched via the Agent tool in ONE message):** see list below. Each writes `audit-reports/NN-name.md`.
+- **Phase 2 (19 parallel subagents, dispatched via the Agent tool in ONE message):** see list below. Each writes `audit-reports/NN-name.md`.
 - **Phase 3 (sequential, you run inline):** synthesise everything into `audit-reports/00-FINAL.md`.
 
 HARD AUTONOMY RULES (apply to YOU and to every dispatched subagent)
@@ -67,10 +67,10 @@ PHASE 1 — Threat model (you execute inline)
 5. Note the recommended MAS profile (L1/L2/R/P) and the ranked top-15 threats — you will pass these to Phase 2.
 
 ═══════════════════════════════════════════════════════════════════
-PHASE 2 — 14 parallel subagents (single message, multiple Agent tool calls)
+PHASE 2 — 19 parallel subagents (single message, multiple Agent tool calls)
 ═══════════════════════════════════════════════════════════════════
 
-After Phase 1, dispatch all 14 in ONE assistant message with 14 Agent tool calls (parallel execution). Use `subagent_type: "general-purpose"` for each.
+After Phase 1, dispatch all 19 in ONE assistant message with 19 Agent tool calls (parallel execution). Use `subagent_type: "general-purpose"` for each.
 
 For EACH subagent, the `prompt` parameter must be:
 
@@ -104,9 +104,9 @@ AUTONOMY RULES
 Begin.
 ```
 
-The 14 subagents to dispatch (copy NAME and NN-name into each prompt):
+The 19 subagents to dispatch (copy NAME and NN-name into each prompt):
 
-| NN | name (file 02–15) | description (4-word) |
+| NN | name (file 02–21) | description (4-word) |
 |----|---|---|
 | 02 | secrets-scanner | "Secret scan + history" |
 | 03 | sbom-vuln | "SBOM + dep vulns" |
@@ -122,8 +122,15 @@ The 14 subagents to dispatch (copy NAME and NN-name into each prompt):
 | 13 | mobile-static | "Mobile APK/IPA static analysis" |
 | 14 | mobile-dynamic | "Mobile Frida + Burp dynamic" |
 | 15 | mobile-platform | "Deeplinks + Keychain + cert pinning" |
+| 16 | webhooks (file 17 in numbered/) | "PayTabs/Adapty HMAC + replay" |
+| 17 | api-bola (file 18 in numbered/) | "PostgREST BOLA + MCP trifecta" |
+| 18 | auth-rate-limit (file 19 in numbered/) | "Clerk + Vercel Firewall + GoTrue captcha" |
+| 19 | ai-prompt (file 20 in numbered/) | "LLM trifecta + prompt injection" |
+| 20 | ota-supply (file 21 in numbered/) | "Expo OTA + lockfile integrity" |
 
-Important: dispatch ALL 14 in a single assistant message containing 14 `Agent` tool calls. Do not loop sequentially.
+NOTE on numbering: the report files are numbered 16-20 (continuing from 15-mobile-platform), but the corresponding terminal-prompt files in `numbered/` are agent-17.md..agent-21.md (since agent-16.md is the synthesis-only orchestrator). Per-prompt files in `raw/` keep the report number: `17-webhooks.txt`..`21-ota-supply.txt`.
+
+Important: dispatch ALL 19 in a single assistant message containing 19 `Agent` tool calls. Do not loop sequentially.
 
 ═══════════════════════════════════════════════════════════════════
 PHASE 3 — Synthesis (you execute inline after all 14 return)

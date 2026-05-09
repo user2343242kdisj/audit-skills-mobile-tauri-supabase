@@ -54,6 +54,11 @@ Read every file in `./audit-reports/` excluding `00-FINAL.md` and `00-orchestrat
 - `13-mobile-static.md` (mobile-static-analysis-auditor)
 - `14-mobile-dynamic.md` (mobile-dynamic-analysis-auditor)
 - `15-mobile-platform.md` (mobile-deeplinks + mobile-storage-crypto)
+- `16-webhooks.md` (webhook-auditor — PayTabs/Adapty HMAC + replay protection)
+- `17-api-bola.md` (api-bola-auditor — PostgREST BOLA + MCP lethal trifecta)
+- `18-auth-rate-limit.md` (auth-rate-limit-auditor — Clerk Bot Protection + Vercel Firewall + GoTrue captcha)
+- `19-ai-prompt.md` (ai-prompt-auditor — LLM trifecta + prompt injection on api-ai/sigma-*)
+- `20-ota-supply.md` (ota-supply-auditor — Expo OTA code-signing + lockfile integrity)
 - `sast-dast.md` (sast-dast-coordinator)
 
 ## Routing reference (informational only — for cross-attribution)
@@ -81,6 +86,11 @@ The following table maps domains to source reports so you can attribute findings
 | SAST/DAST | `sast-dast.md` |
 | Threat modelling | `01-threat-model.md` |
 | SBOM + dep vuln scan | `03-sbom-vuln.md` |
+| Inbound webhook HMAC + replay | `16-webhooks.md` |
+| BOLA on PostgREST + MCP trifecta | `17-api-bola.md` |
+| Clerk + Vercel Firewall + GoTrue rate-limits | `18-auth-rate-limit.md` |
+| LLM prompt injection + tool-use design | `19-ai-prompt.md` |
+| Expo OTA + lockfile integrity | `20-ota-supply.md` |
 
 ## Report template (verbatim — produce this format at ./audit-reports/00-FINAL.md)
 
@@ -191,9 +201,9 @@ AUDIT_SKILLS_PATH="${AUDIT_SKILLS_PATH:-./audit}"
 export AUDIT_SKILLS_PATH
 ```
 
-This agent requires that the other 15 agents have already produced reports
+This agent requires that the upstream agents have already produced reports
 in ./audit-reports/. If ./audit-reports/ is empty, BLOCKED: no upstream
-reports to synthesise — run agents 1-15 first.
+reports to synthesise — run agents 1-15 plus 17-21 first.
 
 1. **List every file in `./audit-reports/`** (excluding `00-FINAL.md` and `00-orchestrator.md`).
    ```bash
@@ -242,7 +252,7 @@ PRE-LAUNCH SECURITY AUDIT REPORT
 ================================
 Status: NO REPORTS FOUND
 
-No subagent reports exist under ./audit-reports/. The orchestrator cannot synthesise a final report without subagent input. Re-run agents 01..15 first.
+No subagent reports exist under ./audit-reports/. The orchestrator cannot synthesise a final report without subagent input. Re-run agents 01..15 and 17..21 first.
 
 REMAINING GAPS
 - All subagents missing — full re-run required.
