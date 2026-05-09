@@ -28,6 +28,28 @@ CONTEXT
 - Subagent reports: `./audit-reports/*.md` (excluding `00-FINAL.md` and `00-orchestrator.md`)
 - Reference docs: `$AUDIT_SKILLS_PATH/docs/`
 
+EXPECTED REPORT SET (each may also be missing or BLOCKED — handle per workflow step 2.d)
+- 01-threat-model.md (threat-modeler)
+- 02-secrets.md (secrets-scanner)
+- 03-sbom-vuln.md (sbom-vuln)
+- 04-sast-dast.md (sast-dast)
+- 05-supabase-rls.md (supabase-rls-auditor)
+- 06-supabase-auth.md (supabase-auth-auditor)
+- 07-supabase-edge-functions.md (supabase-edge-functions-auditor)
+- 08-supabase-postgres.md (supabase-postgres-auditor)
+- 09-supabase-storage-realtime-network.md (storage + realtime + network)
+- 10-tauri-capabilities.md (tauri-capabilities-auditor)
+- 11-tauri-ipc.md (tauri-ipc-auditor)
+- 12-tauri-config-and-distribution.md (CSP + updater + binary hardening)
+- 13-mobile-static.md (mobile-static-analysis-auditor)
+- 14-mobile-dynamic.md (mobile-dynamic-analysis-auditor)
+- 15-mobile-platform.md (mobile-deeplinks + storage-crypto)
+- 16-webhooks.md (webhook-auditor — PayTabs/Adapty HMAC + replay)
+- 17-api-bola.md (api-bola-auditor — PostgREST eq + lethal trifecta)
+- 18-auth-rate-limit.md (auth-rate-limit-auditor — Clerk Bot Protection + Vercel Firewall + GoTrue captcha)
+- 19-ai-prompt.md (ai-prompt-auditor — LLM trifecta + prompt-injection on api-ai/sigma-*)
+- 20-ota-supply.md (ota-supply-auditor — Expo OTA code-signing + lockfile integrity)
+
 WORKFLOW (autonomous; no questions)
 
 1. List every file in `./audit-reports/` (excluding `00-FINAL.md`).

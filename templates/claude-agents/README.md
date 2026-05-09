@@ -1,6 +1,6 @@
 # Claude Code Subagent Hierarchy
 
-21 specialised subagents that turn this audit toolkit into a hierarchy: **one orchestrator + 20 narrow domain experts.** Each agent has a tight, audit-specific system prompt and references the deep documents in `../../docs/`.
+26 specialised subagents that turn this audit toolkit into a hierarchy: **one orchestrator + 25 narrow domain experts.** Each agent has a tight, audit-specific system prompt and references the deep documents in `../../docs/`.
 
 ## Hierarchy
 
@@ -31,11 +31,18 @@ audit-orchestrator               ← top-level "gestor"
 │   ├── mobile-deeplinks-auditor         App Links, Universal Links, intents
 │   └── mobile-storage-crypto-auditor    Keychain, Keystore, cert pinning
 │
-└── Cross-cutting (4)
-    ├── secrets-scanner-coordinator      ggshield + TruffleHog + Gitleaks
-    ├── sast-dast-coordinator            Semgrep + Schemathesis + BOLA harness + ZAP
-    ├── threat-modeler                   pytm + STRIDE + 16 custom threats
-    └── sbom-vuln-coordinator            CycloneDX + Grype + Trivy + cargo-audit
+├── Cross-cutting (4)
+│   ├── secrets-scanner-coordinator      ggshield + TruffleHog + Gitleaks
+│   ├── sast-dast-coordinator            Semgrep + Schemathesis + BOLA harness + ZAP
+│   ├── threat-modeler                   pytm + STRIDE + 16 custom threats
+│   └── sbom-vuln-coordinator            CycloneDX + Grype + Trivy + cargo-audit
+│
+└── Coverage-gap closers (5)
+    ├── webhook-auditor                  PayTabs/Adapty/Stripe HMAC + replay protection
+    ├── api-bola-auditor                 PostgREST eq cross-user probes + MCP lethal trifecta
+    ├── auth-rate-limit-auditor          Clerk Bot Protection + Vercel Firewall + GoTrue captcha
+    ├── ai-prompt-auditor                LLM trifecta + prompt injection on api-ai/sigma-*
+    └── ota-supply-auditor               Expo OTA code-signing + lockfile integrity
 ```
 
 ## How to deploy
@@ -63,7 +70,7 @@ ln -s ../audit-skills/templates/claude-agents .claude/agents
 /agents
 ```
 
-Should list all 21 agents under your project scope.
+Should list all 26 agents under your project scope.
 
 ## Usage patterns
 

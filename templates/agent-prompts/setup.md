@@ -104,6 +104,11 @@ WORKFLOW (numbered, strictly idempotent)
    # Secret scanning — required for agent 2
    export GITGUARDIAN_API_KEY="CHANGEME"
 
+   # Clerk + Vercel Firewall — required for agent 19 (auth-rate-limit)
+   export CLERK_SECRET_KEY="CHANGEME"        # sk_live_… or sk_test_…
+   export VERCEL_TOKEN="CHANGEME"            # Firewall API token
+   export VERCEL_PROJECT_ID="CHANGEME"
+
    # Optional
    export SEMGREP_APP_TOKEN=""
    export MOBSF_API_KEY=""

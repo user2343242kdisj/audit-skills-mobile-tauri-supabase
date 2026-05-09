@@ -38,6 +38,11 @@ You are the **audit orchestrator** for the mobile + Tauri-desktop + Supabase sta
 | SAST/DAST orchestration | `sast-dast-coordinator` | Semgrep, Schemathesis, BOLA harness, ZAP |
 | Threat modelling | `threat-modeler` | pytm, STRIDE, attack-tree generation |
 | SBOM + dep vuln scan | `sbom-vuln-coordinator` | CycloneDX, Grype, cargo-audit, cargo-deny, npm-audit |
+| Inbound webhook HMAC + replay | `webhook-auditor` | `supabase/functions/*-webhook/`, PayTabs/Adapty/Stripe HMAC, idempotency tables |
+| BOLA + MCP lethal trifecta | `api-bola-auditor` | PostgREST `eq.<id>` cross-user probes, RPC body `auth.uid()` filter, service_role on LLM paths |
+| Clerk + Vercel Firewall + GoTrue captcha | `auth-rate-limit-auditor` | Bot Protection state, firewall rules, `security_captcha_enabled`, rate-limit headers |
+| LLM prompt-injection + tool-use design | `ai-prompt-auditor` | system-prompt construction, RAG framing, tool inventory, OWASP LLM Top 10 |
+| Expo OTA + lockfile integrity | `ota-supply-auditor` | `expo.updates.codeSigningCertificate`, manifest URL ownership, lockfile integrity hashes |
 
 ## Phases of a full audit (the canonical order)
 
@@ -60,8 +65,13 @@ When the user says "full audit" or "pre-launch review", run in this order:
    - `supabase-realtime-auditor`
    - `supabase-network-auditor`
    - `tauri-binary-hardening-auditor`
+   - `webhook-auditor`
+   - `auth-rate-limit-auditor`
+   - `ai-prompt-auditor`
+   - `ota-supply-auditor`
 4. **Dynamic / DAST.** Sequential (some need test users):
    - `sast-dast-coordinator` (Semgrep, then Schemathesis, then BOLA harness)
+   - `api-bola-auditor` (live cross-user probes; depends on USER_A_JWT / USER_B_JWT)
    - `mobile-dynamic-analysis-auditor`
    - `mobile-deeplinks-auditor`
    - `mobile-storage-crypto-auditor`

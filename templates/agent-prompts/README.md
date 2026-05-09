@@ -3,29 +3,36 @@
 Self-contained prompts to paste into individual Claude Code terminals so each subagent runs **fully autonomously, in parallel**, and writes its findings to `./audit-reports/`.
 
 **Two ways to run:**
-- **MASTER (1 terminal, easiest)** — paste [`MASTER.md`](MASTER.md) into a single Claude Code session. Phase 1 runs inline; 14 Phase-2 agents dispatched in parallel via the Agent tool; Phase 3 synthesis. End-to-end, fully autonomous.
-- **16 individual terminals (max isolation)** — paste each numbered prompt into its own terminal as documented below.
+- **MASTER (1 terminal, easiest)** — paste [`MASTER.md`](MASTER.md) into a single Claude Code session. Phase 1 runs inline; 19 Phase-2 agents dispatched in parallel via the Agent tool; Phase 3 synthesis. End-to-end, fully autonomous.
+- **21 individual terminals (max isolation)** — paste each numbered prompt into its own terminal as documented below.
 
-**16 prompts** — designed to run in 16 individual terminals for max parallelism:
+**21 prompts** — designed to run in individual terminals for max parallelism:
 
 ```
-00-orchestrator.md                          ← Phase 3 (last): synthesises the 15 reports
+00-orchestrator.md                          ← Phase 3 (last): synthesises the 20 Phase-2 reports
 01-threat-modeler.md                        ← Phase 1 (first): drives MAS profile selection
 02-secrets-scanner.md                       ┐
 03-sbom-vuln.md                             │
 04-sast-dast.md                             │
 05-supabase-rls.md                          │
 06-supabase-auth.md                         │
-07-supabase-edge-functions.md               │ Phase 2 (parallel —
-08-supabase-postgres.md                     │ run 14 in parallel)
-09-supabase-storage-realtime-network.md     │
+07-supabase-edge-functions.md               │
+08-supabase-postgres.md                     │
+09-supabase-storage-realtime-network.md     │ Phase 2 (parallel — run 19 in parallel)
 10-tauri-capabilities.md                    │
 11-tauri-ipc.md                             │
 12-tauri-config-and-distribution.md         │  (CSP + WebView + updater + binary hardening)
 13-mobile-static.md                         │
 14-mobile-dynamic.md                        │
-15-mobile-platform.md                       ┘  (deeplinks + Keychain/Keystore + cert pinning)
+15-mobile-platform.md                       │  (deeplinks + Keychain/Keystore + cert pinning)
+17-webhooks.md (raw) / agent-17.md          │  (PayTabs/Adapty HMAC + replay)
+18-api-bola.md (raw) / agent-18.md          │  (PostgREST BOLA + MCP lethal trifecta)
+19-auth-rate-limit.md (raw) / agent-19.md   │  (Clerk Bot Protection + Vercel Firewall + GoTrue captcha)
+20-ai-prompt.md (raw) / agent-20.md         │  (LLM trifecta + prompt injection on api-ai/sigma-*)
+21-ota-supply.md (raw) / agent-21.md        ┘  (Expo OTA code-signing + lockfile integrity)
 ```
+
+NOTE on numbering: agent-16.md is the synthesis-only orchestrator (it reads existing reports). The 5 new agents are agent-17..agent-21 in `numbered/`, but their report files are 16-webhooks.md..20-ota-supply.md (continuing from 15-mobile-platform.md). Raw paste-text variants in `raw/` keep the agent number (17-21).
 
 ## One-time setup (in YOUR APP REPO at `~/desktop/travus`)
 
@@ -84,7 +91,7 @@ Wait for `DONE | threat-modeler | …` line. Output: `audit-reports/01-threat-mo
 
 ### Phase 2 — Domain auditors (parallel)
 
-Open 14 separate terminals (or use `tmux`/`zellij` for split-pane). In each:
+Open 19 separate terminals (or use `tmux`/`zellij` for split-pane). In each:
 
 ```bash
 cd ~/desktop/travus
@@ -101,13 +108,15 @@ You can also batch them with `claude -p` (non-interactive):
 cd ~/desktop/travus
 op vault list >/dev/null   # unlock 1Password once
 for prompt in ./audit/templates/agent-prompts/0[2-9]-*.md \
-              ./audit/templates/agent-prompts/1[0-5]-*.md; do
-  name=$(basename "$prompt" .md)
+              ./audit/templates/agent-prompts/1[0-5]-*.md \
+              ./audit/templates/agent-prompts/raw/1[7-9]-*.txt \
+              ./audit/templates/agent-prompts/raw/2[0-1]-*.txt; do
+  name=$(basename "$prompt" | sed 's/\.[^.]*$//')
   log="audit-reports/$name.log"
   (claude --dangerously-skip-permissions -p "$(cat "$prompt")" > "$log" 2>&1) &
 done
 wait
-echo "All 14 Phase 2 agents complete."
+echo "All 19 Phase 2 agents complete."
 ```
 
 ### Phase 3 — Orchestrator synthesis (sequential, runs LAST)
@@ -151,6 +160,11 @@ Every prompt embeds the same autonomy rules:
 | `audit-reports/13-mobile-static.md` | MobSF + jadx + apktool + manifest red-flags + plutil/codesign/otool |
 | `audit-reports/14-mobile-dynamic.md` | Frida pinning bypass + Burp + Objection memory dump + Drozer scanners |
 | `audit-reports/15-mobile-platform.md` | Deeplinks/intents (sec A) + Keychain/Keystore (sec B) + cert pinning (sec C) |
+| `audit-reports/16-webhooks.md` | Per-webhook HMAC + replay-protection evidence; covers PayTabs, Adapty, Stripe-style |
+| `audit-reports/17-api-bola.md` | PostgREST eq-filter cross-user probes + RPC body review + MCP lethal-trifecta scan |
+| `audit-reports/18-auth-rate-limit.md` | Clerk Bot Protection state + Vercel Firewall config + GoTrue captcha + live rate-limit probe |
+| `audit-reports/19-ai-prompt.md` | LLM tool inventory + system-prompt construction review + RAG framing + OWASP LLM Top 10 |
+| `audit-reports/20-ota-supply.md` | Expo OTA code-signing + manifest URL ownership + lockfile integrity + dependency-confusion |
 
 ## Skipping irrelevant agents
 

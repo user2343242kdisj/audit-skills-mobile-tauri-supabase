@@ -93,6 +93,10 @@ WORKFLOW (numbered, strictly idempotent)
      op://Travus/Test Users/user_a_jwt (NOT in vault — agent will skip BOLA)         → USER_A_JWT
      op://Travus/Test Users/user_b_jwt (NOT in vault — agent will skip BOLA)         → USER_B_JWT
      op://Travus/GitGuardian/api_key (NOT in vault — agent will use TruffleHog/Gitleaks only)                  → GITGUARDIAN_API_KEY
+     # New for agent-19 (auth-rate-limit-auditor):
+     op://Travus/Clerk/admin_api_key                    → CLERK_SECRET_KEY
+     op://Travus/Vercel/firewall_token                  → VERCEL_TOKEN
+     op://Travus/Vercel/project_id                      → VERCEL_PROJECT_ID
    PATHS
    ```
 
