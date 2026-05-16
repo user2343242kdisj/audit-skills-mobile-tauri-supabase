@@ -82,6 +82,24 @@ The following table maps domains to source reports so you can attribute findings
 | Threat modelling | `01-threat-model.md` |
 | SBOM + dep vuln scan | `03-sbom-vuln.md` |
 
+## Extended agents 17–29 (added 2026-05-16 — extreme security build)
+
+| Domain | Source report file (under ./audit-reports/) |
+|---|---|
+| LLM Top 10 2025 red-team (OWASP LLM01–10, Garak, Promptfoo, indirect injection) | `17-llm-redteam.md` |
+| Webhook HMAC + replay + idempotency (9 Travus webhooks) | `18-webhook-signature.md` |
+| Race / TOCTOU / state-machine on transactional flows | `19-race-toctou.md` |
+| Supply chain attestation (SLSA v1.1, Sigstore, npm provenance, IOC) | `20-supply-chain-attestation.md` |
+| Applied crypto review (JWT alg, HMAC ct-compare, AES-GCM nonce, etc.) | `21-crypto-review.md` |
+| Mobile RASP runtime (App Attest, Play Integrity, anti-Frida, anti-debug) | `22-mobile-rasp-runtime.md` |
+| Anti-fraud fintech (velocity, geo, promo abuse, sanctions) | `23-anti-fraud-fintech.md` |
+| Privacy / PII / DSAR (GDPR Art 17/20, LGPD, Sentry+PostHog scrub) | `24-privacy-pii-dsar.md` |
+| DNS + email + cert (CAA, DNSSEC, SPF/DKIM/DMARC, MTA-STS, CT-log) | `25-dns-email-cert.md` |
+| Bot / abuse / ATO (Clerk + Vercel BotID + CF + HIBP + impossible-travel) | `26-bot-abuse-ato.md` |
+| Browser security web (CSP-L3, Trusted Types, COOP/COEP, cookies, postMessage) | `27-browser-security-web.md` |
+| Compliance regulatory (PSD3, MiCA, DORA, EU AI Act, LGPD, GDPR, PCI 4.0.1) | `28-compliance-regulatory.md` |
+| OTA update channel (EAS Update, kill-switch, force-update, phased rollout) | `29-ota-update-channel.md` |
+
 ## Report template (verbatim — produce this format at ./audit-reports/00-FINAL.md)
 
 ```
